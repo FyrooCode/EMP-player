@@ -1,28 +1,40 @@
-<script setup>
-import { ref, onMounted } from 'vue'
-import { Sun, Moon, FolderOpen } from 'lucide-vue-next'
+<script setup lang="ts">
+import { ref } from 'vue' 
+import { Sun, Moon, FolderOpen, Loader2 } from 'lucide-vue-next'
+import { open } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core' 
+import { useSettingsStore } from '../stores/settings'
 
-const isDark = ref(false)
+const settings = useSettingsStore()
+const isScanning = ref(false)
 
-const toggleDarkMode = () => {
-  isDark.value = !isDark.value
-  
-  const html = document.documentElement
-  html.style.transition = 'none'
-  
-  if (isDark.value) {
-    html.classList.add('dark')
-  } else {
-    html.classList.remove('dark')
+const handleSelectFolder = async () => {
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: 'Select Music Folder'
+  })
+
+  if (selected && typeof selected === 'string') {
+    isScanning.value = true
+    try {
+      // 1. Simpan path folder ke DB
+      await settings.updateMusicPath(selected)
+      
+      // 2. Panggil Scanner Rust
+      const files = await invoke<string[]>('scan_music_folder', { folderPath: selected })
+      
+      // 3. Simpan daftar file ke tabel 'songs'
+      await settings.saveScannedSongs(files)
+      
+      console.log(`Berhasil memindai ${files.length} lagu.`)
+    } catch (err) {
+      console.error("Gagal memindai folder:", err)
+    } finally {
+      isScanning.value = false
+    }
   }
-  
-  void html.offsetHeight
-  html.style.transition = ''
 }
-
-onMounted(() => {
-  isDark.value = document.documentElement.classList.contains('dark')
-})
 </script>
 
 <template>
@@ -42,14 +54,13 @@ onMounted(() => {
           <h3 class="font-bold uppercase tracking-widest text-sm text-slate-800 dark:text-white">Appearance</h3>
           <p class="text-xs opacity-60 text-slate-600 dark:text-white/40">Switch between dark and light themes</p>
         </div>
-        
         <button 
-          @click="toggleDarkMode"
-          class="flex items-center gap-3 px-5 py-2 rounded-full shadow-lg transition-all duration-500 hover:scale-105 cursor-pointer bg-slate-900 text-white"
+          @click="settings.toggleTheme"
+          class="flex items-center gap-3 px-5 py-2 rounded-full shadow-lg transition-all duration-500 hover:scale-105 cursor-pointer bg-slate-900 text-white dark:bg-white dark:text-slate-900"
         >
-          <component :is="isDark ? Sun : Moon" :size="16" />
+          <component :is="settings.isDarkMode ? Sun : Moon" :size="16" />
           <span class="text-[10px] font-black uppercase tracking-widest">
-            {{ isDark ? 'Light Mode' : 'Dark Mode' }}
+            {{ settings.isDarkMode ? 'Light Mode' : 'Dark Mode' }}
           </span>
         </button>
       </section>
@@ -57,23 +68,22 @@ onMounted(() => {
       <section class="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-6">
         <div>
           <h3 class="font-bold uppercase tracking-widest text-sm text-slate-800 dark:text-white">Library Directory</h3>
-          <p class="text-xs font-mono text-slate-500 dark:text-white/40">C:/Users/Bell/Music</p>
+          <p class="text-xs font-mono text-slate-500 dark:text-white/40 italic">
+            {{ settings.musicPath || 'No folder selected' }}
+          </p>
         </div>
-        <button class="flex items-center gap-3 px-5 py-2 rounded-full border transition-all cursor-pointer border-slate-300 text-slate-800 hover:bg-slate-100 dark:border-white/20 dark:text-white dark:hover:bg-white/5">
-          <FolderOpen :size="16" />
-          <span class="text-[10px] font-black uppercase tracking-widest">Change Path</span>
+
+        <button 
+          @click="handleSelectFolder"
+          :disabled="isScanning"
+          class="flex items-center gap-3 px-5 py-2 rounded-full shadow-lg transition-all duration-500 hover:scale-105 cursor-pointer bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50"
+        >
+          <component :is="isScanning ? Loader2 : FolderOpen" :size="16" :class="{'animate-spin': isScanning}" />
+          <span class="text-[10px] font-black uppercase tracking-widest">
+            {{ isScanning ? 'Scanning...' : 'Change Path' }}
+          </span>
         </button>
       </section>
     </div>
   </div>
 </template>
-
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-</style>

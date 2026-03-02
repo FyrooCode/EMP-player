@@ -1,26 +1,27 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import AppShell from './components/layout/AppShell.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import TitleBar from './components/layout/TitleBar.vue'
+import { useSettingsStore } from './stores/settings'
 
 const isMaximized = ref(false)
 const isResizing = ref(false)
 const appWindow = getCurrentWindow()
+const settings = useSettingsStore()
 
 onMounted(async () => {
-  isMaximized.value = await appWindow.isMaximized()
 
+  await settings.loadSettingsFromDB()
+  
+  isMaximized.value = await appWindow.isMaximized()
 
   await appWindow.onResized(async () => {
     isMaximized.value = await appWindow.isMaximized()
     
-
     isResizing.value = true
-    
-
     setTimeout(() => {
       isResizing.value = false
     }, 100)

@@ -40,12 +40,13 @@
 
 
 body {
-  @apply bg-transparent text-slate-900 antialiased overflow-hidden font-sans;
+  @apply bg-transparent antialiased overflow-hidden font-sans;
   @apply transition-colors duration-500 ease-in-out;
+  color: var(--text-primary);
 }
 
-.dark body {
-  @apply text-white;
+html.dark body {
+  color: var(--text-primary);
 }
 
 h1, h2, h3, h4, p, span {

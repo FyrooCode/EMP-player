@@ -15,6 +15,12 @@ const router = createRouter({
       name: 'settings',
       component: () => import('../views/SettingsView.vue')
     },
+    {
+      path: '/album/:name', // :name adalah parameter dinamis
+      name: 'album',
+      component: () => import('../views/AlbumView.vue')
+    },
+
 
   ],
 })

@@ -18,7 +18,7 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
     
     <button 
       @click="toggleSidebar"
-      class="absolute -right-3 top-20 w-6 h-6 bg-slate-800 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-transform z-50"
+      class="absolute -right-3 top-20 w-6 h-6 bg-slate-800 dark:bg-slate-600 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-transform z-50"
     >
       <ChevronRight 
         :size="14" 
@@ -35,7 +35,7 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
         class="py-8 flex items-center mb-6 shrink-0 h-28 transition-all duration-500 ease-in-out"
         :class="isExpanded ? 'gap-4' : 'gap-0'"
       >
-        <div class="min-w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0">
+        <div class="min-w-12 h-12 bg-slate-800 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-white dark:text-white shadow-lg shrink-0">
           <Disc3 :size="28" class="animate-spin-slow" />
         </div>
         
@@ -50,9 +50,9 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
 
       <nav class="flex flex-col gap-2 flex-1">
         <div 
-          class="flex items-center gap-4 p-3 rounded-xl transition-colors duration-300 hover:bg-black/5 cursor-pointer"
+          class="flex items-center gap-4 p-3 rounded-xl transition-colors duration-300 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
         >
-          <Search :size="20" class="text-slate-600 shrink-0" />
+          <Search :size="20" class="text-slate-600 dark:text-slate-400 shrink-0" />
           <span 
             class="text-xs font-bold uppercase tracking-widest text-slate-600 transition-all duration-500 overflow-hidden"
             :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
@@ -64,8 +64,8 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
         <RouterLink 
           to="/" 
           class="flex items-center gap-4 p-3 rounded-xl transition-[background-color,color] duration-300 group/link"
-          active-class="bg-slate-800 text-white shadow-lg !hover:bg-slate-800"
-          :class="route.path !== '/' && 'hover:bg-black/5'"
+          active-class="bg-slate-800 dark:bg-slate-700 text-white shadow-lg !hover:bg-slate-800 dark:!hover:bg-slate-700"
+          :class="route.path !== '/' && 'hover:bg-black/5 dark:hover:bg-white/5'"
         >
           <Library :size="20" class="shrink-0" />
           <span 
@@ -75,7 +75,7 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
         </RouterLink>
 
         <div 
-          class="flex items-center gap-4 p-3 rounded-xl transition-colors duration-300 hover:bg-slate-800 hover:text-white cursor-pointer group/link"
+          class="flex items-center gap-4 p-3 rounded-xl transition-colors duration-300 hover:bg-slate-800 dark:hover:bg-slate-700 hover:text-white cursor-pointer group/link"
         >
           <LayoutGrid :size="20" class="shrink-0" />
           <span 
@@ -89,8 +89,8 @@ const toggleSidebar = () => isExpanded.value = !isExpanded.value
         <RouterLink 
           to="/settings" 
           class="flex items-center gap-4 p-3 rounded-xl transition-[background-color,color] duration-300 group/link"
-          active-class="bg-slate-800 text-white shadow-lg !hover:bg-slate-800"
-          :class="route.path !== '/settings' && 'hover:bg-black/5'"
+          active-class="bg-slate-800 dark:bg-slate-700 text-white shadow-lg !hover:bg-slate-800 dark:!hover:bg-slate-700"
+          :class="route.path !== '/settings' && 'hover:bg-black/5 dark:hover:bg-white/5'"
         >
           <Settings :size="20" class="shrink-0" />
           <span 

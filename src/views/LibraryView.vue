@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router' // Added Vue Router
 import { getDB } from '../services/db'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { Disc } from 'lucide-vue-next'
 
+const router = useRouter() // Initialize router
 const albums = ref<any[]>([])
 
 onMounted(async () => {
@@ -48,6 +50,11 @@ onMounted(async () => {
     console.error("Gagal memuat library:", error)
   }
 })
+
+// Added navigation function
+const goToAlbum = (albumName: string) => {
+  router.push(`/album/${encodeURIComponent(albumName)}`)
+}
 </script>
 
 <template>
@@ -59,21 +66,23 @@ onMounted(async () => {
       </p>
     </header>
 
-    <div v-if="albums.length === 0" class="flex items-center justify-center h-64 text-slate-400 font-bold uppercase tracking-widest text-sm">
+    <div v-if="albums.length === 0" class="flex items-center justify-center h-64 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-sm">
       Belum ada data. Silakan scan folder di Settings.
     </div>
 
     <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8">
-      <div v-for="album in albums" :key="album.album" class="group cursor-pointer flex flex-col">
+      <div v-for="album in albums" :key="album.album" 
+           @click="goToAlbum(album.album)"
+           class="group cursor-pointer flex flex-col">
         
-        <div class="relative aspect-square bg-slate-200/50 rounded-2xl border border-black/5 overflow-hidden flex flex-col items-center justify-center mb-3 shadow-sm hover:shadow-xl transition-shadow duration-300">
+        <div class="relative aspect-square bg-slate-200/50 dark:bg-slate-800/50 rounded-2xl border border-black/5 dark:border-white/10 overflow-hidden flex flex-col items-center justify-center mb-3 shadow-sm hover:shadow-xl transition-shadow duration-300">
           <img 
             v-if="album.coverUrl" 
             :src="album.coverUrl" 
             class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
             alt="cover" 
           />
-          <div v-else class="z-10 text-black/40 text-xs flex flex-col items-center gap-2 font-bold italic">
+          <div v-else class="z-10 text-black/40 dark:text-white/40 text-xs flex flex-col items-center gap-2 font-bold italic">
             <Disc :size="32" class="opacity-50" />
             <span>NO COVER</span>
           </div>

@@ -18,16 +18,13 @@ const handleSelectFolder = async () => {
   if (selected && typeof selected === 'string') {
     isScanning.value = true
     try {
-      // 1. Simpan path folder ke DB
       await settings.updateMusicPath(selected)
       
-      // 2. Panggil Scanner Rust
-      const files = await invoke<string[]>('scan_music_folder', { folderPath: selected })
+      // PENTING: Panggil invoke dengan struktur data any[] (karena mengembalikan JSON)
+      const songsData = await invoke<any[]>('scan_music_folder', { folderPath: selected })
       
-      // 3. Simpan daftar file ke tabel 'songs'
-      await settings.saveScannedSongs(files)
-      
-      console.log(`Berhasil memindai ${files.length} lagu.`)
+      await settings.saveScannedSongs(songsData)
+      console.log(`Berhasil memindai dan menyimpan ${songsData.length} lagu beserta metadatanya.`)
     } catch (err) {
       console.error("Gagal memindai folder:", err)
     } finally {

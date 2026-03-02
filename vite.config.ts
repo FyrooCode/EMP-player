@@ -15,4 +15,13 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  server: {
+    port: 5173,
+    strictPort: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Access-Control-Allow-Origin': '*',
+    }
+  }
 })

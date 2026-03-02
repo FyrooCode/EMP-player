@@ -8,33 +8,22 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function loadSettingsFromDB() {
     const db = getDB()
-    const result = await db.select<{ key: string, value: string }[]>(
-      "SELECT * FROM settings"
-    )
-
+    const result = await db.select<{ key: string, value: string }[]>("SELECT * FROM settings")
     result.forEach(setting => {
       if (setting.key === 'music_path') musicPath.value = setting.value
-      if (setting.key === 'theme') {
-        isDarkMode.value = setting.value === 'dark'
-      }
+      if (setting.key === 'theme') isDarkMode.value = setting.value === 'dark'
     })
   }
 
-
-  async function saveScannedSongs(filePaths: string[]) {
+  // UBAH BAGIAN INI: Menerima Object, bukan String
+  async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
-    
-
     await db.execute("DELETE FROM songs")
-
     
-    for (const path of filePaths) {
-    
-      const fileName = path.split(/[\\/]/).pop() || "Unknown Title"
-      
+    for (const song of songsMetadata) {
       await db.execute(
-        "INSERT OR IGNORE INTO songs (title, path) VALUES ($1, $2)",
-        [fileName, path]
+        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path) VALUES ($1, $2, $3, $4, $5, $6)",
+        [song.title, song.artist, song.album, song.path, song.duration, song.cover_path]
       )
     }
   }
@@ -42,10 +31,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function updateMusicPath(newPath: string) {
     const db = getDB()
     musicPath.value = newPath
-    await db.execute(
-      "UPDATE settings SET value = $1 WHERE key = 'music_path'",
-      [newPath]
-    )
+    await db.execute("UPDATE settings SET value = $1 WHERE key = 'music_path'", [newPath])
   }
 
   async function toggleTheme() {
@@ -65,13 +51,5 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { 
-    musicPath, 
-    isDarkMode, 
-    loadSettingsFromDB, 
-    updateMusicPath, 
-    toggleTheme,
-    applyTheme,
-    saveScannedSongs 
-  }
+  return { musicPath, isDarkMode, loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs }
 })

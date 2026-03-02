@@ -16,6 +16,8 @@
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "fs:allow-applocaldata-read-recursive",
+    "app-full-access"
   ]
 }

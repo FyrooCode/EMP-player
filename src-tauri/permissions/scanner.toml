@@ -4,12 +4,16 @@ description = "Izinkan frontend memanggil fungsi scan_music_folder"
 commands.allow = ["scan_music_folder"]
 
 [[permission]]
-identifier = "allow-covers-read"
-description = "Allows reading album cover files from local data"
+identifier = "allow-audio-read"
+description = "Allows reading audio files and covers from external drives"
 [[permission.scope.allow]]
 path = "$APPLOCALDATA/covers/*"
+[[permission.scope.allow]]
+path = "D:/**/*"
+[[permission.scope.allow]]
+path = "C:/**/*"
 
 [[set]]
 identifier = "app-full-access"
 description = "Full access for the application commands and assets"
-permissions = ["allow-scan", "allow-covers-read"]
+permissions = ["allow-scan", "allow-audio-read"]

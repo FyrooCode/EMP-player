@@ -4,18 +4,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { getDB } from '../services/db'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settings'
-import { ArrowLeft, Play, Clock, Disc } from 'lucide-vue-next'
+// 1. IMPORT PLAYER STORE DI SINI
+import { usePlayerStore } from '../stores/player' 
+import { ArrowLeft, Play, Clock, Disc, Pause } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
+// 2. INISIALISASI PLAYER STORE
+const player = usePlayerStore() 
 
-// Mengambil nama album dari URL dan men-decode spasi/karakter khusus
 const albumName = ref(decodeURIComponent(route.params.name as string))
 const songs = ref<any[]>([])
 const albumInfo = ref<any>({ artist: 'Unknown Artist', coverUrl: null })
 
-// Computed untuk warna berdasarkan theme
 const isDarkMode = computed(() => settings.isDarkMode)
 const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
@@ -24,14 +26,12 @@ const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192,
 onMounted(async () => {
   try {
     const db = getDB()
-    // 1. Fetch semua lagu yang nama albumnya cocok
     const result = await db.select<any[]>(
       "SELECT * FROM songs WHERE album = $1 ORDER BY title ASC",
       [albumName.value]
     )
     songs.value = result
 
-    // 2. Jika lagu ketemu, kita load cover albumnya (mirip logika di LibraryView)
     if (result.length > 0) {
       albumInfo.value.artist = result[0].artist
       
@@ -53,7 +53,6 @@ onMounted(async () => {
   }
 })
 
-// Helper untuk format detik jadi menit:detik (misal 210 -> 3:30)
 const formatTime = (seconds: number) => {
   if (!seconds) return "0:00"
   const m = Math.floor(seconds / 60)
@@ -101,16 +100,27 @@ const goBack = () => {
       </div>
 
       <div v-for="(song, index) in songs" :key="song.id" 
+           @click="player.playTrack(song, songs)"
            class="flex items-center px-4 py-3 rounded-xl transition-colors group cursor-pointer"
-           :class="isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50'">
+           :class="[
+             isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50',
+             player.currentSong?.id === song.id ? (isDarkMode ? 'bg-white/10' : 'bg-slate-200/80') : ''
+           ]">
         
         <div class="w-12 text-center text-xs font-bold relative transition-colors" :style="{ color: tertiaryTextColor }">
-          <span class="group-hover:opacity-0 transition-opacity">{{ index + 1 }}</span>
-          <Play :size="14" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity fill-current" 
+          <span :class="{'opacity-0': player.currentSong?.id === song.id}" class="group-hover:opacity-0 transition-opacity">{{ index + 1 }}</span>
+          
+          <div v-if="player.currentSong?.id === song.id" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-0.5 h-3">
+             <div class="w-1 bg-current h-full animate-bounce" :style="{ color: textColor, animationDelay: '0ms' }"></div>
+             <div class="w-1 bg-current h-1/2 animate-bounce" :style="{ color: textColor, animationDelay: '150ms' }"></div>
+             <div class="w-1 bg-current h-3/4 animate-bounce" :style="{ color: textColor, animationDelay: '300ms' }"></div>
+          </div>
+          
+          <Play v-else :size="14" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity fill-current" 
                 :style="{ color: textColor }" />
         </div>
 
-        <div class="flex-grow text-sm font-bold transition-colors" :style="{ color: textColor }">
+        <div class="flex-grow text-sm font-bold transition-colors" :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
           {{ song.title }}
         </div>
 
@@ -122,26 +132,3 @@ const goBack = () => {
 
   </div>
 </template>
-
-<style scoped>
-/* Ensure album view text colors override main.css global rules */
-div[style*="color"] {
-  color: inherit !important;
-}
-
-h1[style*="color"] {
-  color: inherit !important;
-}
-
-p[style*="color"] {
-  color: inherit !important;
-}
-
-button[style*="color"] {
-  color: inherit !important;
-}
-
-span[style*="color"] {
-  color: inherit !important;
-}
-</style>

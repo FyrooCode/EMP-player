@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@theme {
+  --color-alice: #F0F8FF;
+  --color-dark-bg: #070709; 
+  --color-outer-glass: rgba(255, 255, 255, 0.15); 
+  
+  --spacing-outer: 0.5rem; 
+  --spacing-gap: 0.5rem;
+  --radius-main: 1.5rem; 
+}
+
+
+:root {
+  --bg-sidebar: #F0F8FF;
+  --bg-button: #1e293b;
+  --bg-button-hover: #0f172a;
+  --text-button: #ffffff;
+  --bg-active: #1e293b;
+  --text-active: #ffffff;
+  --border-sidebar: rgba(0, 0, 0, 0.1); 
+  --text-primary: #0f172a;
+  --icon-color: #475569;
+  --hover-bg: rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  /* Dark Mode */
+  --bg-sidebar: #070709;
+  --bg-button: #1e293b;
+  --bg-button-hover: #334155;
+  --text-button: #ffffff;
+  --bg-active: #1e293b;
+  --text-active: #ffffff;
+  --border-sidebar: rgba(255, 255, 255, 0.1);
+  --text-primary: #ffffff;
+  --icon-color: #9ca3af;
+  --hover-bg: rgba(255, 255, 255, 0.05);
+}
+
+
+body {
+  @apply bg-transparent text-slate-900 antialiased overflow-hidden font-sans;
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+.dark body {
+  @apply text-white;
+}
+
+h1, h2, h3, h4, p, span {
+  @apply text-inherit;
+}
+
+h1, h2, h3, h4, h5, h6, p, button:not(.group\/link) {
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+/* ===== SIDEBAR THEME STYLING via CSS VARIABLES ===== */
+aside {
+  background-color: var(--bg-sidebar);
+  color: var(--text-primary);
+  border-color: var(--border-sidebar);
+}
+
+aside > button {
+  background-color: var(--bg-button);
+  color: var(--text-button);
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+aside .bg-slate-800 {
+  background-color: var(--bg-button) !important;
+  color: var(--text-button) !important;
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+aside h2, aside p {
+  color: var(--text-primary);
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+aside .text-slate-600 {
+  color: var(--icon-color) !important;
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+aside [class*="hover:bg-black/5"]:hover, 
+aside [class*="hover:bg-white/5"]:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+aside [class*="hover:bg-slate-800"]:hover {
+  background-color: var(--bg-button-hover) !important;
+  color: var(--text-active) !important;
+}
+
+aside [class*="hover:text-white"]:hover {
+  color: var(--text-active) !important;
+}
+
+aside a.router-link-active {
+  background-color: var(--bg-active) !important;
+  color: var(--text-active) !important;
+  @apply shadow-lg transition-colors duration-500 ease-in-out;
+}
+
+aside .border-black\/5,
+aside .border-black\/10,
+aside hr {
+  border-color: var(--border-sidebar) !important;
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+.group\/link {
+  @apply transition-colors transition-shadow duration-300 ease-in-out;
+}
+
+/* ===== SETTINGS VIEW DARK MODE BUTTON ===== */
+button.bg-slate-900 {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+.dark button.bg-slate-900 {
+  background-color: #ffffff !important;
+  color: #070709 !important;
+}
+
+/* ===== APP SHELL & MAIN VIEW DARK MODE ===== */
+.bg-outer-glass {
+  background-color: var(--color-outer-glass);
+  border-color: rgba(255, 255, 255, 0.2);
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+main.bg-alice {
+  background-color: var(--bg-sidebar);
+  color: var(--text-primary);
+  border-color: var(--border-sidebar);
+  @apply transition-colors duration-500 ease-in-out;
+}
+
+main [class*="border-white"],
+main [class*="border-black"],
+main [class*="border-slate"] {
+  border-color: var(--border-sidebar) !important;
+  @apply transition-colors duration-500 ease-in-out;
+}

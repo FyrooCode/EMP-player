@@ -206,13 +206,13 @@ onUnmounted(() => {
                }">
           </div>
 
-          <div class="absolute top-1/2 -translate-y-1/2 flex justify-center transition-all duration-200"
+          <div class="absolute top-1/2 -translate-y-1/2 flex justify-center transition duration-200"
                :class="isDraggingVolume ? 'opacity-100 scale-100' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100'"
                :style="{ left: `calc(${(player.volume * 100)}% - 6px)` }">
             
             <div class="w-3 h-3 rounded-full shadow-md" :style="{ backgroundColor: textTertiary }"></div>
             
-            <div class="absolute bottom-full mb-2 px-2 py-1 rounded bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[9px] font-bold tracking-widest shadow-xl whitespace-nowrap pointer-events-none transition-all duration-200"
+            <div class="absolute bottom-full mb-2 px-2 py-1 rounded bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[9px] font-bold tracking-widest shadow-xl whitespace-nowrap pointer-events-none transition duration-200"
                  :class="isDraggingVolume ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'">
               {{ Math.round(player.volume * 100) }}%
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900 dark:border-t-white"></div>

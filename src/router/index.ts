@@ -19,11 +19,16 @@ const router = createRouter({
       name: 'album',
       component: () => import('../views/AlbumView.vue')
     },
-    // TAMBAHKAN RUTE LYRICS DI SINI
     {
       path: '/lyrics',
       name: 'lyrics',
       component: () => import('../views/LyricsView.vue')
+    },
+    // TAMBAHKAN RUTE SEARCH DI SINI
+    {
+      path: '/search',
+      name: 'search',
+      component: () => import('../views/SearchView.vue')
     },
   ],
 })

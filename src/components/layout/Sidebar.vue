@@ -107,15 +107,18 @@ const handleSearchInput = (e) => {
           >Library</span>
         </RouterLink>
 
-        <div 
-          class="flex items-center gap-4 p-3 rounded-xl transition-colors duration-300 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-        >
-          <LayoutGrid :size="20" class="shrink-0 text-slate-600 dark:text-slate-400" />
-          <span 
-            class="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 transition-all duration-500 overflow-hidden"
-            :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
-          >Collections</span>
-        </div>
+<RouterLink 
+  to="/collections" 
+  class="flex items-center gap-4 p-3 rounded-xl transition-[background-color,color] duration-300 group/link"
+  active-class="bg-slate-800 dark:bg-slate-700 text-white shadow-lg !hover:bg-slate-800 dark:!hover:bg-slate-700"
+  :class="route.path !== '/collections' && 'hover:bg-black/5 dark:hover:bg-white/5'"
+>
+  <LayoutGrid :size="20" class="shrink-0" />
+  <span 
+    class="text-xs font-bold uppercase tracking-widest transition-all duration-500 overflow-hidden"
+    :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
+  >Collections</span>
+</RouterLink>
       </nav>
 
       <div class="py-8 border-t border-black/10 dark:border-white/10 shrink-0">

@@ -10,6 +10,16 @@ const router = createRouter({
       component: LibraryView 
     },
     {
+      path: '/collections',
+      name: 'collections',
+      component: () => import('../views/CollectionsView.vue')
+    },
+    {
+      path: '/collection/all-songs',
+      name: 'all-songs',
+      component: () => import('../views/AllSongsView.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue')
@@ -24,7 +34,7 @@ const router = createRouter({
       name: 'lyrics',
       component: () => import('../views/LyricsView.vue')
     },
-    // TAMBAHKAN RUTE SEARCH DI SINI
+
     {
       path: '/search',
       name: 'search',

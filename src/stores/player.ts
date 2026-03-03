@@ -8,16 +8,22 @@ export const usePlayerStore = defineStore('player', () => {
   const currentSong = ref<any>(null)
   const isPlaying = ref(false)
   const isShuffle = ref(false)
-  const repeatMode = ref(0) 
+  const repeatMode = ref(0) // 0: Off, 1: All, 2: One
   
   const currentTime = ref(0)
   const duration = ref(0)
-  const volume = ref(0.7) 
+  
+  // Baca dari localStorage dulu. Kalau kosong, pakai default 0.3 (30%)
+  const savedVolume = localStorage.getItem('emp-volume')
+  const volume = ref(savedVolume ? parseFloat(savedVolume) : 0.3) 
+  
   const coverUrl = ref<string | null>(null)
 
+  // Antrean lagu
   const queue = ref<any[]>([])
   const currentIndex = ref(-1)
 
+  // Mesin Audio HTML5
   const audio = new Audio()
   audio.volume = volume.value
 
@@ -32,6 +38,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   audio.addEventListener('ended', () => {
     if (repeatMode.value === 2) {
+      // Repeat One
       audio.currentTime = 0
       audio.play()
     } else {
@@ -41,6 +48,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // --- ACTIONS ---
   
+  // Fungsi internal untuk mengambil gambar cover lagu
   const loadCover = async (path: string | null) => {
     if (!path) {
       coverUrl.value = null
@@ -51,6 +59,7 @@ export const usePlayerStore = defineStore('player', () => {
       const relativePath = `covers/${filename}`;
       const contents = await readFile(relativePath, { baseDir: BaseDirectory.AppLocalData });
       const blob = new Blob([contents], { type: 'image/jpeg' });
+      // Bersihkan URL lama untuk mencegah memory leak
       if (coverUrl.value) URL.revokeObjectURL(coverUrl.value);
       coverUrl.value = URL.createObjectURL(blob);
     } catch (err) {
@@ -83,15 +92,17 @@ export const usePlayerStore = defineStore('player', () => {
     
     currentSong.value = song
     
-    // Load cover duluan
+    // Load cover duluan supaya UI Player langsung update
     await loadCover(song.cover_path)
     
     // Update Media Session OS setelah cover selesai dimuat
     updateMediaSession()
     
+    // Convert local Windows path ke asset protocol Tauri v2
     const playableUrl = convertFileSrc(song.path)
     audio.src = playableUrl
     
+    // Gunakan try-catch agar tidak merusak aplikasi jika lagu gagal di-load
     try {
       await audio.play()
       isPlaying.value = true
@@ -118,8 +129,10 @@ export const usePlayerStore = defineStore('player', () => {
     let nextIdx = currentIndex.value + 1
     
     if (isShuffle.value) {
+       // Random index sederhana
        nextIdx = Math.floor(Math.random() * queue.value.length)
     } else if (nextIdx >= queue.value.length) {
+       // Kembali ke awal kalau Repeat All (1), atau stop kalau off (0)
        if (repeatMode.value === 1) {
            nextIdx = 0
        } else {
@@ -135,6 +148,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   const prevTrack = () => {
     if (queue.value.length === 0) return
+    // Jika lagu sudah jalan > 3 detik, ulang lagu dari awal saja
     if (audio.currentTime > 3) {
       audio.currentTime = 0
       return
@@ -155,6 +169,8 @@ export const usePlayerStore = defineStore('player', () => {
   const setVolume = (val: number) => {
     volume.value = val
     audio.volume = val
+    // Simpan ke localStorage setiap kali digeser
+    localStorage.setItem('emp-volume', val.toString())
   }
 
   // ==========================================

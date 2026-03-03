@@ -51,7 +51,6 @@ fn scan_directory_recursive(
                         let mut album = String::from("Unknown Album");
                         let mut duration = 0;
                         let mut cover_path = String::new();
-                        // Variabel penampung lirik
                         let mut lyrics = String::new();
 
                         match Probe::open(&entry_path).and_then(|p| p.read()) {
@@ -64,7 +63,6 @@ fn scan_directory_recursive(
                                     if let Some(a) = tag.artist() { artist = a.to_string(); }
                                     if let Some(al) = tag.album() { album = al.to_string(); }
                                     
-                                    // Ekstrak lirik (ItemKey dikirim secara langsung, bukan reference)
                                     if let Some(lyr) = tag.get_string(lofty::tag::ItemKey::Lyrics) {
                                         lyrics = lyr.to_string();
                                     }
@@ -75,7 +73,6 @@ fn scan_directory_recursive(
                             Err(e) => println!("Skipping metadata for {:?}: {}", entry_path, e),
                         }
 
-                        // Masukkan lirik ke JSON yang dikirim ke frontend
                         music_data.push(serde_json::json!({
                             "title": title,
                             "artist": artist,
@@ -111,6 +108,12 @@ async fn scan_music_folder(
     Ok(music_data)
 }
 
+// Command untuk membaca file .lrc
+#[tauri::command]
+async fn read_lrc_file(path: String) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![Migration {
@@ -135,7 +138,7 @@ pub fn run() {
                 .add_migrations("sqlite:emp_player_v2.db", migrations)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![scan_music_folder])
+        .invoke_handler(tauri::generate_handler![scan_music_folder, read_lrc_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

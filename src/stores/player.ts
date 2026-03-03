@@ -60,6 +60,7 @@ export const usePlayerStore = defineStore('player', () => {
         const minutes = parseInt(match[1])
         const seconds = parseInt(match[2])
         const ms = parseInt(match[3])
+        // Konversi ke total detik
         const time = minutes * 60 + seconds + (ms > 99 ? ms / 1000 : ms / 100)
         return { time, text: match[4].trim() }
       }
@@ -83,10 +84,8 @@ export const usePlayerStore = defineStore('player', () => {
             crossfadeStarted.value = true 
             
             if (repeatMode.value === 2) {
-              // Otomatis repeat: pakai crossfade
               playTrack(currentSong.value, queue.value, true) 
             } else {
-              // Otomatis next: pakai crossfade
               nextTrack(true)
             }
           }
@@ -180,7 +179,6 @@ export const usePlayerStore = defineStore('player', () => {
     }, intervalTime)
   }
 
-  // MODIFIKASI: Tambahkan parameter useCrossfade (default false)
   const playTrack = async (song: any, contextQueue: any[], useCrossfade: boolean = false) => {
     const settings = useSettingsStore()
     const cfDuration = settings.crossfade
@@ -204,11 +202,9 @@ export const usePlayerStore = defineStore('player', () => {
     newAudio.src = playableUrl
 
     try {
-      // Crossfade hanya jalan jika useCrossfade bernilai true DAN durasi crossfade > 0
       if (useCrossfade && cfDuration > 0 && !oldAudio.paused && oldAudio.currentTime > 0) {
         performCrossfade(oldAudio, newAudio, cfDuration, volume.value)
       } else {
-        // Matikan animasi fade yang sedang berjalan jika ada
         if (fadeInterval) {
           clearInterval(fadeInterval)
           fadeInterval = null
@@ -267,7 +263,6 @@ export const usePlayerStore = defineStore('player', () => {
     if (prevIdx < 0) {
       prevIdx = repeatMode.value === 1 ? queue.value.length - 1 : 0
     }
-    // Prev manual biasanya tidak pakai crossfade agar terasa responsif
     playTrack(queue.value[prevIdx], queue.value, false)
   }
 
@@ -303,10 +298,12 @@ export const usePlayerStore = defineStore('player', () => {
     }
   })
 
+  // --- RETURN SEMUA ACTIONS & STATE ---
   return { 
     currentSong, isPlaying, isShuffle, repeatMode, 
     currentTime, duration, volume, coverUrl, queue,
     parsedLyrics,
+    parseLyrics, // <--- INI WAJIB ADA AGAR BISA DIPANGGIL DI LYRICSVIEW
     playTrack, togglePlay, nextTrack, prevTrack, seek, setVolume 
   }
 })

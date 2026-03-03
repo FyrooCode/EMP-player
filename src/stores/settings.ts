@@ -17,26 +17,25 @@ export const useSettingsStore = defineStore('settings', () => {
     })
   }
 
-  // --- BAGIAN YANG DIUBAH UNTUK MENDUKUNG LIRIK ---
   async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
     await db.execute("DELETE FROM songs")
     
     for (const song of songsMetadata) {
       await db.execute(
-        // Tambahkan kolom 'lyrics' dan parameter '$7'
         "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path, lyrics) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        [
-          song.title, 
-          song.artist, 
-          song.album, 
-          song.path, 
-          song.duration, 
-          song.cover_path, 
-          song.lyrics // Data lirik dari Rust
-        ]
+        [song.title, song.artist, song.album, song.path, song.duration, song.cover_path, song.lyrics]
       )
     }
+  }
+
+  // Fungsi baru: Simpan lirik manual ke DB
+  async function updateSongLyrics(songPath: string, lyrics: string) {
+    const db = getDB()
+    await db.execute(
+      "UPDATE songs SET lyrics = $1 WHERE path = $2",
+      [lyrics, songPath]
+    )
   }
 
   async function updateMusicPath(newPath: string) {
@@ -70,6 +69,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return { 
     musicPath, isDarkMode, crossfade, 
-    loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs, updateCrossfade 
+    loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs, updateCrossfade, updateSongLyrics 
   }
 })

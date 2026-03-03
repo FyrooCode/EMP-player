@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router' // Added Vue Router
+import { useRouter } from 'vue-router'
 import { getDB } from '../services/db'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { Disc } from 'lucide-vue-next'
+import { Disc, Loader2 } from 'lucide-vue-next'
 
-const router = useRouter() // Initialize router
+const router = useRouter()
 const albums = ref<any[]>([])
+const isLoading = ref(true) // Added loading state
 
 onMounted(async () => {
   try {
+    isLoading.value = true
     const db = getDB()
     const songs = await db.select<{ album: string, artist: string, cover_path: string }[]>(
       "SELECT album, artist, cover_path FROM songs GROUP BY album"
     )
 
     if (songs.length === 0) {
-      console.log("Database kosong, tidak ada album untuk ditampilkan.")
+      isLoading.value = false
       return
     }
 
@@ -35,7 +37,7 @@ onMounted(async () => {
           const blob = new Blob([contents], { type: 'image/jpeg' });
           coverUrl = URL.createObjectURL(blob);
         } catch (err) {
-          console.error(`Gagal load cover untuk album ${song.album}:`, err);
+          console.error(`Failed to load cover for album ${song.album}:`, err);
         }
       }
 
@@ -47,11 +49,12 @@ onMounted(async () => {
 
     albums.value = processedAlbums;
   } catch (error) {
-    console.error("Gagal memuat library:", error)
+    console.error("Failed to load library:", error)
+  } finally {
+    isLoading.value = false // Stop loading regardless of outcome
   }
 })
 
-// Added navigation function
 const goToAlbum = (albumName: string) => {
   router.push(`/album/${encodeURIComponent(albumName)}`)
 }
@@ -61,13 +64,16 @@ const goToAlbum = (albumName: string) => {
   <div class="relative h-full overflow-y-auto pb-20 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
     <header class="mb-8">
       <h1 class="text-5xl font-black tracking-tighter italic uppercase text-black dark:text-white">Library</h1>
-      <p class="text-black/60 dark:text-white/60 font-semibold tracking-wide uppercase text-xs mt-1">
-        EMP Player // {{ albums.length }} Albums
-      </p>
     </header>
 
-    <div v-if="albums.length === 0" class="flex items-center justify-center h-64 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-sm">
-      Belum ada data. Silakan scan folder di Settings.
+    <div v-if="isLoading" class="flex flex-col items-center justify-center h-64 gap-4">
+      <Loader2 class="w-8 h-8 animate-spin text-slate-400 dark:text-slate-500" />
+      <span class="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Loading Collection</span>
+    </div>
+
+    <div v-else-if="albums.length === 0" class="flex flex-col items-center justify-center h-64 text-slate-400 dark:text-slate-500 gap-2">
+      <span class="font-bold uppercase tracking-widest text-sm">No albums found</span>
+      <span class="text-[10px] uppercase tracking-widest opacity-60">Please scan your music folder in Settings</span>
     </div>
 
     <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8">
@@ -81,6 +87,7 @@ const goToAlbum = (albumName: string) => {
             :src="album.coverUrl" 
             class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
             alt="cover" 
+            loading="lazy"
           />
           <div v-else class="z-10 text-black/40 dark:text-white/40 text-xs flex flex-col items-center gap-2 font-bold italic">
             <Disc :size="32" class="opacity-50" />
@@ -96,8 +103,19 @@ const goToAlbum = (albumName: string) => {
             {{ album.artist }}
           </p>
         </div>
-
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Added a smooth fade for the grid appearance */
+.grid {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>

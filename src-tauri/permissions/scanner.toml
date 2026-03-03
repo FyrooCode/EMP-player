@@ -1,7 +1,7 @@
 [[permission]]
 identifier = "allow-scan"
-description = "Izinkan frontend memanggil fungsi scan_music_folder"
-commands.allow = ["scan_music_folder"]
+description = "Izinkan frontend memanggil fungsi scan_music_folder dan read_lrc_file"
+commands.allow = ["scan_music_folder", "read_lrc_file"]
 
 [[permission]]
 identifier = "allow-audio-read"

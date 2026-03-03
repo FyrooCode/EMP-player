@@ -5,6 +5,8 @@ import { getDB } from '../services/db'
 export const useSettingsStore = defineStore('settings', () => {
   const musicPath = ref('')
   const isDarkMode = ref(false)
+  // STATE BARU: Menyimpan nilai durasi crossfade
+  const crossfade = ref(0) 
 
   async function loadSettingsFromDB() {
     const db = getDB()
@@ -12,10 +14,11 @@ export const useSettingsStore = defineStore('settings', () => {
     result.forEach(setting => {
       if (setting.key === 'music_path') musicPath.value = setting.value
       if (setting.key === 'theme') isDarkMode.value = setting.value === 'dark'
+      // BACA DARI DB: Mengambil nilai crossfade
+      if (setting.key === 'crossfade') crossfade.value = parseInt(setting.value) || 0
     })
   }
 
-  // UBAH BAGIAN INI: Menerima Object, bukan String
   async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
     await db.execute("DELETE FROM songs")
@@ -51,5 +54,16 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { musicPath, isDarkMode, loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs }
+  // FUNGSI BARU: Update Crossfade
+  async function updateCrossfade(val: number) {
+    const db = getDB()
+    crossfade.value = val
+    // INSERT OR REPLACE akan memasukkan baris baru jika 'key' belum ada, atau me-replace jika sudah ada
+    await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('crossfade', $1)", [val.toString()])
+  }
+
+  return { 
+    musicPath, isDarkMode, crossfade, 
+    loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs, updateCrossfade 
+  }
 })

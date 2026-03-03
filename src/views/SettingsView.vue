@@ -5,7 +5,12 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core' 
 import { useSettingsStore } from '../stores/settings'
 
+// 1. IMPORT TOAST STORE
+import { useToastStore } from '../stores/toast'
+
 const settings = useSettingsStore()
+// 2. INISIALISASI TOAST
+const toast = useToastStore() 
 const isScanning = ref(false)
 
 const handleSelectFolder = async () => {
@@ -17,6 +22,10 @@ const handleSelectFolder = async () => {
 
   if (selected && typeof selected === 'string') {
     isScanning.value = true
+    
+    // 3. TAMPILKAN TOAST LOADING (autoClose diset false agar tidak hilang sendiri)
+    const toastId = toast.show('loading', `Scanning folder: ${selected}`, false)
+    
     try {
       await settings.updateMusicPath(selected)
       
@@ -24,9 +33,15 @@ const handleSelectFolder = async () => {
       const songsData = await invoke<any[]>('scan_music_folder', { folderPath: selected })
       
       await settings.saveScannedSongs(songsData)
+      
+      // 4. JIKA SUKSES, UBAH STATUS TOAST MENJADI SUCCESS
+      toast.updateStatus(toastId, 'success', `Successfully scanned ${songsData.length} tracks!`)
       console.log(`Berhasil memindai dan menyimpan ${songsData.length} lagu beserta metadatanya.`)
+      
     } catch (err) {
       console.error("Gagal memindai folder:", err)
+      // 5. JIKA GAGAL, UBAH STATUS TOAST MENJADI ERROR
+      toast.updateStatus(toastId, 'error', 'Failed to scan the music folder.')
     } finally {
       isScanning.value = false
     }

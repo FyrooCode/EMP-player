@@ -1,5 +1,5 @@
 [package]
-name = "emp-playe"
+name = "emp-player"
 version = "0.1.0"
 description = "A music player app built with Vue and Tauri"
 authors = ["you"]

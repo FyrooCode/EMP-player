@@ -5,13 +5,21 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import AppShell from './components/layout/AppShell.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import TitleBar from './components/layout/TitleBar.vue'
-import PlayerBar from './components/PlayerBar.vue' // 1. IMPORT PLAYER BAR DI SINI
+import PlayerBar from './components/PlayerBar.vue'
+import Toast from './components/Toast.vue'
 import { useSettingsStore } from './stores/settings'
+
+
+// 1. Import Player Store di sini
+import { usePlayerStore } from './stores/player'
 
 const isMaximized = ref(false)
 const isResizing = ref(false)
 const appWindow = getCurrentWindow()
 const settings = useSettingsStore()
+
+// 2. Inisialisasi Player Store
+const player = usePlayerStore()
 
 onMounted(async () => {
   await settings.loadSettingsFromDB()
@@ -51,8 +59,25 @@ onMounted(async () => {
         <RouterView />
       </div>
 
-      <PlayerBar />
+      <Transition name="slide-up">
+        <PlayerBar v-if="player.currentSong" />
+      </Transition>
       
     </main>
+    <Toast />
   </AppShell>
 </template>
+
+<style scoped>
+/* 4. CSS untuk efek animasi meluncur dari bawah */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(100%);
+}
+</style>

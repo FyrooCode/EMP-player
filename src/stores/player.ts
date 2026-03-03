@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
+import { listen } from '@tauri-apps/api/event'
 
 import { useSettingsStore } from './settings'
 
@@ -19,12 +20,8 @@ export const usePlayerStore = defineStore('player', () => {
   const volume = ref(savedVolume ? parseFloat(savedVolume) : 0.3) 
   
   const coverUrl = ref<string | null>(null)
-
-  // Antrean lagu
   const queue = ref<any[]>([])
   const currentIndex = ref(-1)
-
-  // --- STATE LYRICS ---
   const parsedLyrics = ref<{ time: number; text: string }[]>([])
 
   // ==========================================
@@ -37,7 +34,6 @@ export const usePlayerStore = defineStore('player', () => {
   audioB.volume = volume.value
 
   const activeEngine = ref<'A' | 'B'>('A')
-  
   const crossfadeStarted = ref(false) 
   let fadeInterval: number | null = null
 
@@ -50,23 +46,19 @@ export const usePlayerStore = defineStore('player', () => {
       parsedLyrics.value = []
       return
     }
-    
     const lines = rawLyrics.split('\n')
     const lyricPattern = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
-    
     const result = lines.map(line => {
       const match = lyricPattern.exec(line)
       if (match) {
         const minutes = parseInt(match[1])
         const seconds = parseInt(match[2])
         const ms = parseInt(match[3])
-        // Konversi ke total detik
         const time = minutes * 60 + seconds + (ms > 99 ? ms / 1000 : ms / 100)
         return { time, text: match[4].trim() }
       }
       return null
     }).filter(item => item !== null && item.text !== "") as { time: number; text: string }[]
-    
     parsedLyrics.value = result
   }
 
@@ -74,7 +66,6 @@ export const usePlayerStore = defineStore('player', () => {
     audio.addEventListener('timeupdate', () => {
       if (activeEngine.value === engineName) {
         currentTime.value = audio.currentTime
-        
         const settings = useSettingsStore()
         const cfDuration = settings.crossfade
         
@@ -82,21 +73,15 @@ export const usePlayerStore = defineStore('player', () => {
           const timeLeft = audio.duration - audio.currentTime
           if (timeLeft <= cfDuration && !crossfadeStarted.value) {
             crossfadeStarted.value = true 
-            
-            if (repeatMode.value === 2) {
-              playTrack(currentSong.value, queue.value, true) 
-            } else {
-              nextTrack(true)
-            }
+            if (repeatMode.value === 2) playTrack(currentSong.value, queue.value, true) 
+            else nextTrack(true)
           }
         }
       }
     })
 
     audio.addEventListener('loadedmetadata', () => {
-      if (activeEngine.value === engineName) {
-        duration.value = audio.duration
-      }
+      if (activeEngine.value === engineName) duration.value = audio.duration
     })
 
     audio.addEventListener('ended', () => {
@@ -114,12 +99,8 @@ export const usePlayerStore = defineStore('player', () => {
   setupAudioEvents(audioB, 'B')
 
   // --- ACTIONS ---
-  
   const loadCover = async (path: string | null) => {
-    if (!path) {
-      coverUrl.value = null
-      return
-    }
+    if (!path) { coverUrl.value = null; return; }
     try {
       const filename = path.split(/[\\/]/).pop();
       const relativePath = `covers/${filename}`;
@@ -128,7 +109,6 @@ export const usePlayerStore = defineStore('player', () => {
       if (coverUrl.value) URL.revokeObjectURL(coverUrl.value);
       coverUrl.value = URL.createObjectURL(blob);
     } catch (err) {
-      console.error("Gagal load cover untuk player:", err);
       coverUrl.value = null
     }
   }
@@ -146,7 +126,6 @@ export const usePlayerStore = defineStore('player', () => {
 
   const performCrossfade = (oldAudio: HTMLAudioElement, newAudio: HTMLAudioElement, durationSec: number, targetVol: number) => {
     if (fadeInterval) clearInterval(fadeInterval)
-    
     const steps = 20 * durationSec 
     const intervalTime = 50 
     const volStep = targetVol / steps 
@@ -158,12 +137,8 @@ export const usePlayerStore = defineStore('player', () => {
     let currentStep = 0
     fadeInterval = window.setInterval(() => {
       currentStep++
-      
-      let newVol = newAudio.volume + volStep
-      let oldVol = oldAudio.volume - volStep
-      
-      if (newVol > targetVol) newVol = targetVol
-      if (oldVol < 0) oldVol = 0
+      let newVol = Math.min(newAudio.volume + volStep, targetVol)
+      let oldVol = Math.max(oldAudio.volume - volStep, 0)
       
       newAudio.volume = newVol
       oldAudio.volume = oldVol
@@ -171,7 +146,6 @@ export const usePlayerStore = defineStore('player', () => {
       if (currentStep >= steps) {
         clearInterval(fadeInterval!)
         fadeInterval = null
-        
         oldAudio.pause()
         oldAudio.currentTime = 0
         newAudio.volume = targetVol
@@ -180,9 +154,13 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const playTrack = async (song: any, contextQueue: any[], useCrossfade: boolean = false) => {
-    const settings = useSettingsStore()
-    const cfDuration = settings.crossfade
+    // Stop any ongoing crossfade immediately when starting a new track
+    if (fadeInterval) {
+      clearInterval(fadeInterval)
+      fadeInterval = null
+    }
 
+    const settings = useSettingsStore()
     queue.value = contextQueue
     currentIndex.value = queue.value.findIndex(s => s.id === song.id)
     currentSong.value = song
@@ -191,10 +169,8 @@ export const usePlayerStore = defineStore('player', () => {
     crossfadeStarted.value = false 
     
     await loadCover(song.cover_path)
-    updateMediaSession()
     
     const playableUrl = convertFileSrc(song.path)
-    
     const oldAudio = getActiveAudio()
     activeEngine.value = activeEngine.value === 'A' ? 'B' : 'A'
     const newAudio = getActiveAudio()
@@ -202,22 +178,17 @@ export const usePlayerStore = defineStore('player', () => {
     newAudio.src = playableUrl
 
     try {
-      if (useCrossfade && cfDuration > 0 && !oldAudio.paused && oldAudio.currentTime > 0) {
-        performCrossfade(oldAudio, newAudio, cfDuration, volume.value)
+      if (useCrossfade && settings.crossfade > 0 && !oldAudio.paused && oldAudio.currentTime > 0) {
+        performCrossfade(oldAudio, newAudio, settings.crossfade, volume.value)
       } else {
-        if (fadeInterval) {
-          clearInterval(fadeInterval)
-          fadeInterval = null
-        }
         oldAudio.pause()
         oldAudio.currentTime = 0
-        
         newAudio.volume = volume.value
         await newAudio.play()
       }
       isPlaying.value = true
+      updateMediaSession()
     } catch (err) {
-      console.error("Gagal memutar audio:", err)
       isPlaying.value = false
     }
   }
@@ -225,71 +196,60 @@ export const usePlayerStore = defineStore('player', () => {
   const togglePlay = () => {
     if (!currentSong.value) return
     const activeAudio = getActiveAudio()
-    
     if (isPlaying.value) activeAudio.pause()
-    else activeAudio.play()
-    
+    else activeAudio.play().catch(e => console.error(e))
     isPlaying.value = !isPlaying.value
   }
 
-  const nextTrack = (useCrossfade: boolean = true) => {
+  const nextTrack = (useCrossfade: boolean = false) => {
     if (queue.value.length === 0) return
-
     let nextIdx = currentIndex.value + 1
     if (isShuffle.value) {
        nextIdx = Math.floor(Math.random() * queue.value.length)
     } else if (nextIdx >= queue.value.length) {
        if (repeatMode.value === 1) nextIdx = 0
        else {
-           isPlaying.value = false
-           getActiveAudio().pause()
-           getActiveAudio().currentTime = 0
+           isPlaying.value = false; getActiveAudio().pause(); getActiveAudio().currentTime = 0;
            return
        }
     }
+    // Perbaikan: Navigasi manual (tombol) tidak pakai crossfade demi responsivitas
     playTrack(queue.value[nextIdx], queue.value, useCrossfade)
   }
 
   const prevTrack = () => {
     if (queue.value.length === 0) return
     const activeAudio = getActiveAudio()
-    
     if (activeAudio.currentTime > 3) {
       activeAudio.currentTime = 0
       return
     }
-    
     let prevIdx = currentIndex.value - 1
-    if (prevIdx < 0) {
-      prevIdx = repeatMode.value === 1 ? queue.value.length - 1 : 0
-    }
+    if (prevIdx < 0) prevIdx = repeatMode.value === 1 ? queue.value.length - 1 : 0
     playTrack(queue.value[prevIdx], queue.value, false)
   }
 
-  const seek = (time: number) => {
-    getActiveAudio().currentTime = time
-  }
-
+  const seek = (time: number) => { getActiveAudio().currentTime = time }
+  
   const setVolume = (val: number) => {
     volume.value = val
     localStorage.setItem('emp-volume', val.toString())
-    
     if (!fadeInterval) {
-      getActiveAudio().volume = val
+      audioA.volume = val
+      audioB.volume = val
     }
   }
 
+  // --- SHORTCUT LISTENERS ---
+  listen('media-toggle', () => togglePlay())
+  listen('media-next', () => nextTrack(false)) // Manual next: no crossfade
+  listen('media-prev', () => prevTrack())
+
   if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => {
-      getActiveAudio().play()
-      isPlaying.value = true
-    });
-    navigator.mediaSession.setActionHandler('pause', () => {
-      getActiveAudio().pause()
-      isPlaying.value = false
-    });
-    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
-    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(true));
+    navigator.mediaSession.setActionHandler('play', () => togglePlay())
+    navigator.mediaSession.setActionHandler('pause', () => togglePlay())
+    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack())
+    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(false))
   }
 
   watch(isPlaying, (newVal) => {
@@ -298,12 +258,10 @@ export const usePlayerStore = defineStore('player', () => {
     }
   })
 
-  // --- RETURN SEMUA ACTIONS & STATE ---
   return { 
     currentSong, isPlaying, isShuffle, repeatMode, 
     currentTime, duration, volume, coverUrl, queue,
-    parsedLyrics,
-    parseLyrics, // <--- INI WAJIB ADA AGAR BISA DIPANGGIL DI LYRICSVIEW
+    parsedLyrics, parseLyrics,
     playTrack, togglePlay, nextTrack, prevTrack, seek, setVolume 
   }
 })

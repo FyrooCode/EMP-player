@@ -1,10 +1,11 @@
 <script setup>
 import { ref, nextTick } from 'vue'
 import { 
-  Library, Settings, Disc3, ChevronRight, LayoutGrid, Search 
+  Library, Settings, Disc3, ChevronRight, LayoutGrid, Search, Plus 
 } from 'lucide-vue-next'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useSearchStore } from '../../stores/search'
+import { getDB } from '../../services/db'
 
 const isExpanded = ref(false)
 const route = useRoute()
@@ -31,6 +32,28 @@ const handleSearchInput = (e) => {
   if (val.length > 0) {
     router.push('/search')
     searchStore.performSearch(val)
+  }
+}
+
+const createNewPlaylist = async () => {
+  try {
+    const db = await getDB()
+    
+    // Get count to determine the next sequential number
+    const existingPlaylists = await db.select("SELECT COUNT(*) as count FROM playlists")
+    const nextNumber = (existingPlaylists[0].count || 0) + 1
+    const playlistName = `My Playlist #${nextNumber}`
+    
+    const result = await db.execute(
+      "INSERT INTO playlists (name) VALUES ($1)",
+      [playlistName]
+    )
+    
+    const lastId = result.lastInsertId
+    isExpanded.value = true
+    router.push(`/playlist/${lastId}`)
+  } catch (err) {
+    console.error("Failed to create playlist:", err)
   }
 }
 </script>
@@ -107,18 +130,30 @@ const handleSearchInput = (e) => {
           >Library</span>
         </RouterLink>
 
-<RouterLink 
-  to="/collections" 
-  class="flex items-center gap-4 p-3 rounded-xl transition-[background-color,color] duration-300 group/link"
-  active-class="bg-slate-800 dark:bg-slate-700 text-white shadow-lg !hover:bg-slate-800 dark:!hover:bg-slate-700"
-  :class="route.path !== '/collections' && 'hover:bg-black/5 dark:hover:bg-white/5'"
->
-  <LayoutGrid :size="20" class="shrink-0" />
-  <span 
-    class="text-xs font-bold uppercase tracking-widest transition-all duration-500 overflow-hidden"
-    :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
-  >Collections</span>
-</RouterLink>
+        <RouterLink 
+          to="/collections" 
+          class="flex items-center gap-4 p-3 rounded-xl transition-[background-color,color] duration-300 group/link"
+          active-class="bg-slate-800 dark:bg-slate-700 text-white shadow-lg !hover:bg-slate-800 dark:!hover:bg-slate-700"
+          :class="route.path !== '/collections' && 'hover:bg-black/5 dark:hover:bg-white/5'"
+        >
+          <LayoutGrid :size="20" class="shrink-0" />
+          <span 
+            class="text-xs font-bold uppercase tracking-widest transition-all duration-500 overflow-hidden"
+            :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
+          >Collections</span>
+        </RouterLink>
+
+        <button 
+          @click="createNewPlaylist"
+          class="flex items-center gap-4 p-3 mt-2 rounded-xl transition-all duration-300 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer group border border-dashed border-black/10 dark:border-white/10"
+        >
+          <Plus :size="20" class="shrink-0 text-slate-600 dark:text-slate-400" />
+          <span 
+            class="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 transition-all duration-500 overflow-hidden"
+            :class="isExpanded ? 'w-auto opacity-100 ml-0' : 'w-0 opacity-0 ml-[-20px] absolute'"
+          >Create Playlist</span>
+        </button>
+
       </nav>
 
       <div class="py-8 border-t border-black/10 dark:border-white/10 shrink-0">
@@ -143,16 +178,13 @@ const handleSearchInput = (e) => {
 .animate-spin-slow {
   animation: spin 8s linear infinite;
 }
-
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-
 .overflow-hidden {
   white-space: nowrap;
 }
-
 input:focus {
   outline: none;
 }

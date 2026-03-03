@@ -19,6 +19,8 @@
     "sql:allow-select",
     "dialog:allow-open",
     "fs:allow-applocaldata-read-recursive",
-    "app-full-access"
+    "fs:allow-applocaldata-write-recursive",
+    "fs:allow-applocaldata-write",
+    "fs:allow-mkdir"
   ]
 }

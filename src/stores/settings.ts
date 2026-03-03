@@ -5,7 +5,6 @@ import { getDB } from '../services/db'
 export const useSettingsStore = defineStore('settings', () => {
   const musicPath = ref('')
   const isDarkMode = ref(false)
-  // STATE BARU: Menyimpan nilai durasi crossfade
   const crossfade = ref(0) 
 
   async function loadSettingsFromDB() {
@@ -14,19 +13,28 @@ export const useSettingsStore = defineStore('settings', () => {
     result.forEach(setting => {
       if (setting.key === 'music_path') musicPath.value = setting.value
       if (setting.key === 'theme') isDarkMode.value = setting.value === 'dark'
-      // BACA DARI DB: Mengambil nilai crossfade
       if (setting.key === 'crossfade') crossfade.value = parseInt(setting.value) || 0
     })
   }
 
+  // --- BAGIAN YANG DIUBAH UNTUK MENDUKUNG LIRIK ---
   async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
     await db.execute("DELETE FROM songs")
     
     for (const song of songsMetadata) {
       await db.execute(
-        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path) VALUES ($1, $2, $3, $4, $5, $6)",
-        [song.title, song.artist, song.album, song.path, song.duration, song.cover_path]
+        // Tambahkan kolom 'lyrics' dan parameter '$7'
+        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path, lyrics) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [
+          song.title, 
+          song.artist, 
+          song.album, 
+          song.path, 
+          song.duration, 
+          song.cover_path, 
+          song.lyrics // Data lirik dari Rust
+        ]
       )
     }
   }
@@ -54,11 +62,9 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  // FUNGSI BARU: Update Crossfade
   async function updateCrossfade(val: number) {
     const db = getDB()
     crossfade.value = val
-    // INSERT OR REPLACE akan memasukkan baris baru jika 'key' belum ada, atau me-replace jika sudah ada
     await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('crossfade', $1)", [val.toString()])
   }
 

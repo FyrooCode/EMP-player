@@ -6,12 +6,10 @@ use tauri::{AppHandle, Manager};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 
-// 1. Fungsi untuk mengekstrak cover art dari file FLAC/MP3
 fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     if let Ok(tagged_file) = Probe::open(path).unwrap().read() {
         if let Some(tag) = tagged_file.primary_tag() {
             if let Some(picture) = tag.pictures().first() {
-                // Simpan gambar ke folder AppLocalData/covers
                 let local_data = app_handle.path().app_local_data_dir().unwrap_or_default();
                 let covers_dir = local_data.join("covers");
                 
@@ -34,7 +32,6 @@ fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     String::new()
 }
 
-// 2. Fungsi rekursif untuk scan folder
 fn scan_directory_recursive(
     dir: &Path,
     music_data: &mut Vec<serde_json::Value>,
@@ -54,8 +51,9 @@ fn scan_directory_recursive(
                         let mut album = String::from("Unknown Album");
                         let mut duration = 0;
                         let mut cover_path = String::new();
+                        // Variabel penampung lirik
+                        let mut lyrics = String::new();
 
-                        // Gunakan match untuk menangani kemungkinan file tidak bisa dibaca oleh Lofty
                         match Probe::open(&entry_path).and_then(|p| p.read()) {
                             Ok(tagged_file) => {
                                 let properties = tagged_file.properties();
@@ -65,20 +63,27 @@ fn scan_directory_recursive(
                                     if let Some(t) = tag.title() { title = t.to_string(); }
                                     if let Some(a) = tag.artist() { artist = a.to_string(); }
                                     if let Some(al) = tag.album() { album = al.to_string(); }
+                                    
+                                    // Ekstrak lirik (ItemKey dikirim secara langsung, bukan reference)
+                                    if let Some(lyr) = tag.get_string(lofty::tag::ItemKey::Lyrics) {
+                                        lyrics = lyr.to_string();
+                                    }
+                                    
                                     cover_path = extract_cover(&entry_path, app_handle);
                                 }
                             },
                             Err(e) => println!("Skipping metadata for {:?}: {}", entry_path, e),
                         }
 
-                        // Simpan sebagai JSON Object
+                        // Masukkan lirik ke JSON yang dikirim ke frontend
                         music_data.push(serde_json::json!({
                             "title": title,
                             "artist": artist,
                             "album": album,
                             "path": entry_path.to_string_lossy(),
                             "duration": duration,
-                            "cover_path": cover_path
+                            "cover_path": cover_path,
+                            "lyrics": lyrics
                         }));
                     }
                 }
@@ -89,7 +94,6 @@ fn scan_directory_recursive(
     }
 }
 
-// 3. Command yang dipanggil oleh Vue
 #[tauri::command]
 async fn scan_music_folder(
     folder_path: String,
@@ -116,7 +120,7 @@ pub fn run() {
               CREATE TABLE IF NOT EXISTS songs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT, artist TEXT, album TEXT, 
-                path TEXT UNIQUE, duration INTEGER, cover_path TEXT
+                path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT
               );
               INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'light');
               INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');",
@@ -128,7 +132,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:emp_player.db", migrations)
+                .add_migrations("sqlite:emp_player_v2.db", migrations)
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![scan_music_folder])

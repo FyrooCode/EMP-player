@@ -4,18 +4,16 @@ description = "Izinkan frontend memanggil fungsi scan_music_folder, read_lrc_fil
 commands.allow = [
     "scan_music_folder", 
     "read_lrc_file", 
-    "start_monitoring" # Tambahkan ini
+    "start_monitoring"
 ]
 
 [[permission]]
 identifier = "allow-audio-read"
-description = "Allows reading audio files and covers from external drives"
+description = "Allows reading audio files and covers from any location"
 [[permission.scope.allow]]
 path = "$APPLOCALDATA/covers/*"
 [[permission.scope.allow]]
-path = "D:/**/*"
-[[permission.scope.allow]]
-path = "C:/**/*"
+path = "**" # IZINKAN AKSES SEMUA PATH (UNIVERSAL)
 
 [[set]]
 identifier = "app-full-access"

@@ -41,6 +41,7 @@ export const usePlayerStore = defineStore('player', () => {
   const getInactiveAudio = () => activeEngine.value === 'A' ? audioB : audioA
 
   // --- LOGIC PARSING LIRIK ---
+  // FIXED: Menambahkan pengecekan tipe data agar lolos build TypeScript
   const parseLyrics = (rawLyrics: string) => {
     if (!rawLyrics) {
       parsedLyrics.value = []
@@ -50,15 +51,21 @@ export const usePlayerStore = defineStore('player', () => {
     const lyricPattern = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
     const result = lines.map(line => {
       const match = lyricPattern.exec(line)
-      if (match) {
+      
+      // Pastikan match dan grup tangkapan (1-4) ada sebelum diproses
+      if (match && match[1] && match[2] && match[3] && match[4] !== undefined) {
         const minutes = parseInt(match[1])
         const seconds = parseInt(match[2])
         const ms = parseInt(match[3])
+        // Kalkulasi waktu dengan mempertimbangkan milidetik (2 atau 3 digit)
         const time = minutes * 60 + seconds + (ms > 99 ? ms / 1000 : ms / 100)
         return { time, text: match[4].trim() }
       }
       return null
-    }).filter(item => item !== null && item.text !== "") as { time: number; text: string }[]
+    }).filter((item): item is { time: number; text: string } => 
+      item !== null && item.text !== ""
+    )
+    
     parsedLyrics.value = result
   }
 
@@ -154,7 +161,6 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const playTrack = async (song: any, contextQueue: any[], useCrossfade: boolean = false) => {
-    // Stop any ongoing crossfade immediately when starting a new track
     if (fadeInterval) {
       clearInterval(fadeInterval)
       fadeInterval = null
@@ -213,7 +219,6 @@ export const usePlayerStore = defineStore('player', () => {
            return
        }
     }
-    // Perbaikan: Navigasi manual (tombol) tidak pakai crossfade demi responsivitas
     playTrack(queue.value[nextIdx], queue.value, useCrossfade)
   }
 
@@ -242,7 +247,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // --- SHORTCUT LISTENERS ---
   listen('media-toggle', () => togglePlay())
-  listen('media-next', () => nextTrack(false)) // Manual next: no crossfade
+  listen('media-next', () => nextTrack(false))
   listen('media-prev', () => prevTrack())
 
   if ('mediaSession' in navigator) {

@@ -17,7 +17,8 @@ function initializeThemeSync() {
 const startApp = async () => {
   initializeThemeSync()
 
-  const isTauri = window.__TAURI_INTERNALS__ !== undefined;
+  // PERBAIKAN: Lakukan casting ke 'any' agar properti __TAURI_INTERNALS__ tidak menyebabkan error build
+  const isTauri = (window as any).__TAURI_INTERNALS__ !== undefined;
 
   if (isTauri) {
     try {

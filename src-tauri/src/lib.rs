@@ -1,10 +1,17 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::borrow::Cow;
-use tauri::{AppHandle, Manager};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager, State, Emitter}; // Ditambahkan Emitter untuk event
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use notify::{Watcher, RecursiveMode, Event}; // Membutuhkan crate notify di Cargo.toml
+
+// State untuk menyimpan watcher agar tetap hidup selama aplikasi berjalan
+struct WatcherState {
+    watcher: Arc<Mutex<Option<notify::RecommendedWatcher>>>,
+}
 
 fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     if let Ok(tagged_file) = Probe::open(path).unwrap().read() {
@@ -65,7 +72,6 @@ fn scan_directory_recursive(
                                     if let Some(a) = tag.artist() { artist = a.to_string(); }
                                     if let Some(al) = tag.album() { album = al.to_string(); }
                                     
-                                    // Ambil Track (#) dan Disc Number menggunakan Lofty Accessor
                                     track_num = tag.track().unwrap_or(0) as i32;
                                     disc_num = tag.disk().unwrap_or(1) as i32;
                                     
@@ -97,6 +103,45 @@ fn scan_directory_recursive(
             }
         }
     }
+}
+
+// Command baru untuk memulai pemantauan folder musik secara otomatis
+#[tauri::command]
+async fn start_monitoring(
+    path: String,
+    app_handle: AppHandle,
+    state: State<'_, WatcherState>,
+) -> Result<(), String> {
+    let mut watcher_lock = state.watcher.lock().unwrap();
+    
+    // Hentikan watcher lama jika ada sebelum memulai yang baru
+    *watcher_lock = None;
+
+    let path_to_watch = PathBuf::from(&path);
+    if !path_to_watch.exists() {
+        return Err("Path tidak ditemukan".into());
+    }
+
+    let app_handle_clone = app_handle.clone();
+    
+    // Inisialisasi watcher baru
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+        match res {
+            Ok(_) => {
+                // Emit event ke frontend bahwa ada perubahan di library
+                let _ = app_handle_clone.emit("library-changed", ());
+            },
+            Err(e) => println!("Watcher error: {:?}", e),
+        }
+    }).map_err(|e| e.to_string())?;
+
+    // Mulai memantau folder secara rekursif
+    watcher.watch(&path_to_watch, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
+    
+    // Simpan watcher ke dalam state agar tetap aktif
+    *watcher_lock = Some(watcher);
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -153,6 +198,10 @@ pub fn run() {
     }];
 
     tauri::Builder::default()
+        // Daftarkan WatcherState agar bisa diakses di command start_monitoring
+        .manage(WatcherState {
+            watcher: Arc::new(Mutex::new(None)),
+        })
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -160,7 +209,12 @@ pub fn run() {
                 .add_migrations("sqlite:emp_player.db", migrations)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![scan_music_folder, read_lrc_file])
+        // Pastikan start_monitoring didaftarkan di invoke_handler
+        .invoke_handler(tauri::generate_handler![
+            scan_music_folder, 
+            read_lrc_file, 
+            start_monitoring
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

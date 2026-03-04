@@ -2,34 +2,92 @@
 import { ref, onMounted, computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { listen, emit } from '@tauri-apps/api/event' // Tambahkan emit di sini
+import { invoke } from '@tauri-apps/api/core'
 import AppShell from './components/layout/AppShell.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import TitleBar from './components/layout/TitleBar.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import Toast from './components/Toast.vue'
-import ContextMenu from './components/layout/ContextMenu.vue' // Tambahkan Import
+import ContextMenu from './components/layout/ContextMenu.vue'
 import { useSettingsStore } from './stores/settings'
 import { usePlayerStore } from './stores/player'
-import { useContextMenuStore } from './stores/contextMenu' // Tambahkan Import
+import { useContextMenuStore } from './stores/contextMenu'
+import { useToastStore } from './stores/toast'
+import { getDB } from './services/db'
 
 const isMaximized = ref(false)
 const isResizing = ref(false)
 const appWindow = getCurrentWindow()
 const settings = useSettingsStore()
 const player = usePlayerStore()
-const contextMenu = useContextMenuStore() // Inisialisasi store
+const contextMenu = useContextMenuStore()
+const toast = useToastStore()
 const route = useRoute()
 
 const isLyricsPage = computed(() => route.path === '/lyrics')
 
+// Logika Auto Scan dengan Kalkulasi Selisih (Diff)
+let scanTimeout: number | null = null;
+const handleAutoScan = async () => {
+  if (scanTimeout) clearTimeout(scanTimeout);
+
+  scanTimeout = window.setTimeout(async () => {
+    if (!settings.musicPath) return;
+    
+    try {
+      const db = await getDB()
+      
+      // 1. Ambil jumlah lagu lama sebelum update
+      const currentSongs = await db.select<any[]>("SELECT COUNT(*) as count FROM songs")
+      const oldCount = currentSongs[0]?.count || 0
+
+      // 2. Jalankan Full Scan di Background
+      const songsData = await invoke<any[]>('scan_music_folder', { folderPath: settings.musicPath });
+      
+      // 3. Simpan data baru
+      await settings.saveScannedSongs(songsData);
+
+      // 4. BERITAHU SEMUA HALAMAN UNTUK REFRESH
+      await emit('library-updated'); 
+      
+      // 5. Hitung selisih
+      const newCount = songsData.length
+      const diff = newCount - oldCount
+
+      // 6. Tampilkan Toast yang relevan
+      if (diff > 0) {
+        toast.show('success', `Added ${diff} new tracks to your library`)
+      } else if (diff < 0) {
+        toast.show('info', `Removed ${Math.abs(diff)} tracks from library`)
+      } else {
+        toast.show('info', `Library synchronized`)
+      }
+      
+    } catch (err) {
+      console.error("Auto-scan failed:", err);
+    }
+  }, 2500); 
+}
+
 onMounted(async () => {
   await settings.loadSettingsFromDB()
   
-  // Mematikan klik kanan bawaan (Inspect Element dkk) secara global
   window.addEventListener('contextmenu', (e) => e.preventDefault())
-  
-  // Menutup context menu saat klik di mana saja
   window.addEventListener('click', () => contextMenu.closeMenu())
+
+  if (settings.musicPath) {
+    try {
+      await invoke('start_monitoring', { path: settings.musicPath });
+    } catch (e) {
+      console.error("Failed to start watcher:", e);
+    }
+  }
+
+  // Listener untuk auto-update
+  await listen('library-changed', () => {
+    handleAutoScan();
+  });
 
   isMaximized.value = await appWindow.isMaximized()
   await appWindow.onResized(async () => {

@@ -6,6 +6,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const musicPath = ref('')
   const isDarkMode = ref(false)
   const crossfade = ref(0) 
+  const libraryView = ref<'grid' | 'list'>('grid') // Default tampilan Grid
 
   async function loadSettingsFromDB() {
     const db = getDB()
@@ -14,10 +15,16 @@ export const useSettingsStore = defineStore('settings', () => {
       if (setting.key === 'music_path') musicPath.value = setting.value
       if (setting.key === 'theme') isDarkMode.value = setting.value === 'dark'
       if (setting.key === 'crossfade') crossfade.value = parseInt(setting.value) || 0
+      if (setting.key === 'library_view') libraryView.value = setting.value as 'grid' | 'list' // Load preferensi view
     })
   }
 
-  // PERBAIKAN: Menambahkan kolom track_num dan disc_num ke query INSERT
+  async function updateLibraryView(view: 'grid' | 'list') {
+    const db = getDB()
+    libraryView.value = view
+    await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('library_view', $1)", [view])
+  }
+
   async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
     await db.execute("DELETE FROM songs")
@@ -33,8 +40,8 @@ export const useSettingsStore = defineStore('settings', () => {
           song.duration, 
           song.cover_path, 
           song.lyrics,
-          song.track_num, // Simpan Track ID
-          song.disc_num   // Simpan Disc ID
+          song.track_num,
+          song.disc_num
         ]
       )
     }
@@ -75,7 +82,8 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   return { 
-    musicPath, isDarkMode, crossfade, 
-    loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, saveScannedSongs, updateCrossfade, updateSongLyrics 
+    musicPath, isDarkMode, crossfade, libraryView,
+    loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, 
+    saveScannedSongs, updateCrossfade, updateSongLyrics, updateLibraryView 
   }
 })

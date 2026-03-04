@@ -52,6 +52,8 @@ fn scan_directory_recursive(
                         let mut duration = 0;
                         let mut cover_path = String::new();
                         let mut lyrics = String::new();
+                        let mut track_num = 0;
+                        let mut disc_num = 1;
 
                         match Probe::open(&entry_path).and_then(|p| p.read()) {
                             Ok(tagged_file) => {
@@ -62,6 +64,10 @@ fn scan_directory_recursive(
                                     if let Some(t) = tag.title() { title = t.to_string(); }
                                     if let Some(a) = tag.artist() { artist = a.to_string(); }
                                     if let Some(al) = tag.album() { album = al.to_string(); }
+                                    
+                                    // Ambil Track (#) dan Disc Number menggunakan Lofty Accessor
+                                    track_num = tag.track().unwrap_or(0) as i32;
+                                    disc_num = tag.disk().unwrap_or(1) as i32;
                                     
                                     if let Some(lyr) = tag.get_string(lofty::tag::ItemKey::Lyrics) {
                                         lyrics = lyr.to_string();
@@ -80,7 +86,9 @@ fn scan_directory_recursive(
                             "path": entry_path.to_string_lossy(),
                             "duration": duration,
                             "cover_path": cover_path,
-                            "lyrics": lyrics
+                            "lyrics": lyrics,
+                            "track_num": track_num,
+                            "disc_num": disc_num
                         }));
                     }
                 }
@@ -115,7 +123,6 @@ async fn read_lrc_file(path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Seluruh skema database disatukan di versi 1
     let migrations = vec![Migration {
         version: 1,
         description: "initialize_all_tables",
@@ -123,7 +130,9 @@ pub fn run() {
               CREATE TABLE IF NOT EXISTS songs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT, artist TEXT, album TEXT, 
-                path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT
+                path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT,
+                track_num INTEGER DEFAULT 0,
+                disc_num INTEGER DEFAULT 1
               );
               CREATE TABLE IF NOT EXISTS playlists (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

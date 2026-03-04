@@ -63,7 +63,7 @@ onMounted(async () => {
           class="absolute inset-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-all duration-500"
           :class="[
             isLyricsPage ? 'p-0' : 'p-8 pt-12',
-            player.currentSong && !isLyricsPage ? 'pb-32' : 'pb-8' 
+            player.currentSong && !isLyricsPage ? 'pb-25' : 'pb-8' 
           ]"
         >
           <RouterView v-slot="{ Component }">

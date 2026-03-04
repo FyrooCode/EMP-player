@@ -5,15 +5,13 @@ import { getDB } from '../services/db'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settings'
 import { usePlayerStore } from '../stores/player' 
-// 1. IMPORT CONTEXT MENU STORE
 import { useContextMenuStore } from '../stores/contextMenu' 
-import { ArrowLeft, Play, Clock, Disc, Pause } from 'lucide-vue-next'
+import { ArrowLeft, Play, Clock, Disc } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
 const player = usePlayerStore() 
-// 2. INISIALISASI CONTEXT MENU STORE
 const contextMenu = useContextMenuStore() 
 
 const albumName = ref(decodeURIComponent(route.params.name as string))
@@ -27,9 +25,10 @@ const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192,
 
 onMounted(async () => {
   try {
-    const db = getDB()
+    const db = await getDB()
+    // Urutkan berdasarkan Disc Number dulu, baru Track Number
     const result = await db.select<any[]>(
-      "SELECT * FROM songs WHERE album = $1 ORDER BY title ASC",
+      "SELECT * FROM songs WHERE album = $1 ORDER BY disc_num ASC, track_num ASC",
       [albumName.value]
     )
     songs.value = result
@@ -62,20 +61,18 @@ const formatTime = (seconds: number) => {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-const goBack = () => {
-  router.back()
-}
+const goBack = () => { router.back() }
 </script>
 
 <template>
-  <div class="relative h-full overflow-y-auto pb-20 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+  <div class="relative h-full overflow-y-auto pb-20 no-scrollbar">
     
     <button @click="goBack" class="flex items-center gap-2 transition-colors mb-8 group cursor-pointer" :style="{ color: secondaryTextColor }">
       <ArrowLeft :size="20" class="group-hover:-translate-x-1 transition-transform" />
-      <span class="text-xs font-bold uppercase tracking-widest" :style="{ color: secondaryTextColor }">Back to Library</span>
+      <span class="text-xs font-bold uppercase tracking-widest">Back to Library</span>
     </button>
 
-    <div class="flex flex-col md:flex-row gap-8 mb-12 items-end">
+    <div class="flex flex-col md:flex-row gap-8 mb-12 items-end px-2">
       <div class="w-48 h-48 rounded-2xl overflow-hidden shadow-2xl flex-shrink-0 border flex items-center justify-center transition-colors" 
            :class="isDarkMode ? 'bg-slate-800/50 border-white/10' : 'bg-slate-200/50 border-black/5'">
         <img v-if="albumInfo.coverUrl" :src="albumInfo.coverUrl" class="w-full h-full object-cover" />
@@ -111,7 +108,9 @@ const goBack = () => {
            ]">
         
         <div class="w-12 text-center text-xs font-bold relative transition-colors" :style="{ color: tertiaryTextColor }">
-          <span :class="{'opacity-0': player.currentSong?.id === song.id}" class="group-hover:opacity-0 transition-opacity">{{ index + 1 }}</span>
+          <span :class="{'opacity-0': player.currentSong?.id === song.id}" class="group-hover:opacity-0 transition-opacity">
+            {{ song.track_num > 0 ? song.track_num : index + 1 }}
+          </span>
           
           <div v-if="player.currentSong?.id === song.id" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-0.5 h-3">
              <div class="w-1 bg-current h-full animate-bounce" :style="{ color: textColor, animationDelay: '0ms' }"></div>
@@ -123,8 +122,11 @@ const goBack = () => {
                 :style="{ color: textColor }" />
         </div>
 
-        <div class="flex-grow text-sm font-bold transition-colors" :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
-          {{ song.title }}
+        <div class="flex-grow text-sm font-bold transition-colors flex items-center gap-2" :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
+          <span>{{ song.title }}</span>
+          <span v-if="song.disc_num > 1" class="text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 opacity-50 uppercase tracking-tighter">
+            Disc {{ song.disc_num }}
+          </span>
         </div>
 
         <div class="w-20 text-right text-xs font-mono transition-colors" :style="{ color: secondaryTextColor }">
@@ -132,6 +134,14 @@ const goBack = () => {
         </div>
       </div>
     </div>
-
   </div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.animate-bounce { animation: bounce 0.6s infinite alternate; }
+@keyframes bounce {
+  from { transform: scaleY(0.4); }
+  to { transform: scaleY(1.2); }
+}
+</style>

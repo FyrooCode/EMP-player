@@ -17,25 +17,32 @@ export const useSettingsStore = defineStore('settings', () => {
     })
   }
 
+  // PERBAIKAN: Menambahkan kolom track_num dan disc_num ke query INSERT
   async function saveScannedSongs(songsMetadata: any[]) {
     const db = getDB()
     await db.execute("DELETE FROM songs")
     
     for (const song of songsMetadata) {
       await db.execute(
-        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path, lyrics) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        [song.title, song.artist, song.album, song.path, song.duration, song.cover_path, song.lyrics]
+        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path, lyrics, track_num, disc_num) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        [
+          song.title, 
+          song.artist, 
+          song.album, 
+          song.path, 
+          song.duration, 
+          song.cover_path, 
+          song.lyrics,
+          song.track_num, // Simpan Track ID
+          song.disc_num   // Simpan Disc ID
+        ]
       )
     }
   }
 
-  // Fungsi baru: Simpan lirik manual ke DB
   async function updateSongLyrics(songPath: string, lyrics: string) {
     const db = getDB()
-    await db.execute(
-      "UPDATE songs SET lyrics = $1 WHERE path = $2",
-      [lyrics, songPath]
-    )
+    await db.execute("UPDATE songs SET lyrics = $1 WHERE path = $2", [lyrics, songPath])
   }
 
   async function updateMusicPath(newPath: string) {

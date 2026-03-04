@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useSettingsStore } from '../stores/settings'
+import { useContextMenuStore } from '../stores/contextMenu' // IMPORT STORE CONTEXT MENU
 import { getDB } from '../services/db'
+import { listen } from '@tauri-apps/api/event' // IMPORT LISTEN UNTUK UPDATE DATA
 import { 
   Music, User, Disc, Clock, Play, Loader2, ArrowLeft 
 } from 'lucide-vue-next'
@@ -11,6 +13,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const player = usePlayerStore()
 const settings = useSettingsStore()
+const contextMenu = useContextMenuStore() // INISIALISASI CONTEXT MENU
 
 const songs = ref<any[]>([])
 const isLoading = ref(true)
@@ -45,13 +48,24 @@ const playSong = (song: any) => {
   player.playTrack(song, songs.value)
 }
 
-onMounted(() => {
-  fetchAllSongs()
+let unlistenLibrary: any;
+
+onMounted(async () => {
+  await fetchAllSongs()
+
+  // Dengar event jika ada lagu yang dihapus dari library agar list terupdate
+  unlistenLibrary = await listen('library-updated', () => {
+    fetchAllSongs()
+  })
+})
+
+onUnmounted(() => {
+  if (unlistenLibrary) unlistenLibrary()
 })
 </script>
 
 <template>
-  <div class="relative h-full overflow-y-auto pb-20 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+  <div class="relative h-full overflow-y-auto pb-20 no-scrollbar">
     
     <header class="mb-8 shrink-0">
       <button 
@@ -101,6 +115,7 @@ onMounted(() => {
         v-for="(song, index) in songs" 
         :key="song.id"
         @click="playSong(song)"
+        @contextmenu.prevent="contextMenu.openMenu($event, song)"
         class="flex items-center px-4 py-3 rounded-xl transition-colors group cursor-pointer"
         :class="[
           isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50',

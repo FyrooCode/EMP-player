@@ -4,15 +4,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { getDB } from '../services/db'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settings'
-// 1. IMPORT PLAYER STORE DI SINI
 import { usePlayerStore } from '../stores/player' 
+// 1. IMPORT CONTEXT MENU STORE
+import { useContextMenuStore } from '../stores/contextMenu' 
 import { ArrowLeft, Play, Clock, Disc, Pause } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
-// 2. INISIALISASI PLAYER STORE
 const player = usePlayerStore() 
+// 2. INISIALISASI CONTEXT MENU STORE
+const contextMenu = useContextMenuStore() 
 
 const albumName = ref(decodeURIComponent(route.params.name as string))
 const songs = ref<any[]>([])
@@ -101,6 +103,7 @@ const goBack = () => {
 
       <div v-for="(song, index) in songs" :key="song.id" 
            @click="player.playTrack(song, songs)"
+           @contextmenu.prevent="contextMenu.openMenu($event, song)"
            class="flex items-center px-4 py-3 rounded-xl transition-colors group cursor-pointer"
            :class="[
              isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50',

@@ -10,7 +10,6 @@
   --radius-main: 1.5rem; 
 }
 
-
 :root {
   --bg-sidebar: #F0F8FF;
   --bg-button: #1e293b;
@@ -25,7 +24,6 @@
 }
 
 .dark {
-  /* Dark Mode */
   --bg-sidebar: #070709;
   --bg-button: #1e293b;
   --bg-button-hover: #334155;
@@ -38,15 +36,30 @@
   --hover-bg: rgba(255, 255, 255, 0.05);
 }
 
+/* NATIVE APP FEEL: Disable Text Selection, Drag, and Browser Cursors */
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  user-select: none; 
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  cursor: default;
+  @apply bg-transparent antialiased overflow-hidden font-sans transition-colors duration-500 ease-in-out;
+  color: var(--text-primary);
+}
 
 body {
-  @apply bg-transparent antialiased overflow-hidden font-sans;
-  @apply transition-colors duration-500 ease-in-out;
   color: var(--text-primary);
 }
 
 html.dark body {
   color: var(--text-primary);
+}
+
+/* Scrollbar Hidden Globally */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 h1, h2, h3, h4, p, span {
@@ -57,7 +70,7 @@ h1, h2, h3, h4, h5, h6, p, button:not(.group\/link) {
   @apply transition-colors duration-500 ease-in-out;
 }
 
-/* ===== SIDEBAR THEME STYLING via CSS VARIABLES ===== */
+/* SIDEBAR THEME STYLING */
 aside {
   background-color: var(--bg-sidebar);
   color: var(--text-primary);
@@ -117,7 +130,7 @@ aside hr {
   @apply transition-colors transition-shadow duration-300 ease-in-out;
 }
 
-/* ===== SETTINGS VIEW DARK MODE BUTTON ===== */
+/* SETTINGS VIEW DARK MODE BUTTON */
 button.bg-slate-900 {
   background-color: #0f172a !important;
   color: #ffffff !important;
@@ -129,7 +142,7 @@ button.bg-slate-900 {
   color: #070709 !important;
 }
 
-/* ===== APP SHELL & MAIN VIEW DARK MODE ===== */
+/* APP SHELL & MAIN VIEW DARK MODE */
 .bg-outer-glass {
   background-color: var(--color-outer-glass);
   border-color: rgba(255, 255, 255, 0.2);

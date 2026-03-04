@@ -108,7 +108,6 @@ async fn scan_music_folder(
     Ok(music_data)
 }
 
-// Command untuk membaca file .lrc
 #[tauri::command]
 async fn read_lrc_file(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| e.to_string())
@@ -116,14 +115,28 @@ async fn read_lrc_file(path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Seluruh skema database disatukan di versi 1
     let migrations = vec![Migration {
         version: 1,
-        description: "create_initial_tables",
+        description: "initialize_all_tables",
         sql: "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
               CREATE TABLE IF NOT EXISTS songs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT, artist TEXT, album TEXT, 
                 path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT
+              );
+              CREATE TABLE IF NOT EXISTS playlists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                cover_path TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+              CREATE TABLE IF NOT EXISTS playlist_songs (
+                playlist_id INTEGER,
+                song_id INTEGER,
+                FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+                FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE,
+                PRIMARY KEY (playlist_id, song_id)
               );
               INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'light');
               INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');",
@@ -135,7 +148,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:emp_player_v2.db", migrations)
+                .add_migrations("sqlite:emp_player.db", migrations)
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![scan_music_folder, read_lrc_file])

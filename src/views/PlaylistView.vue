@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDB } from '../services/db'
 import { useSettingsStore } from '../stores/settings'
 import { usePlayerStore } from '../stores/player' 
+import { useContextMenuStore } from '../stores/contextMenu' // IMPORT STORE CONTEXT MENU
 import { open } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
+import { listen } from '@tauri-apps/api/event' // IMPORT LISTEN UNTUK UPDATE DATA
 import { ArrowLeft, Play, Clock, Music, Edit2, Trash2, Camera } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
 const player = usePlayerStore() 
+const contextMenu = useContextMenuStore() // INISIALISASI CONTEXT MENU
 
 const playlistId = route.params.id
 const playlist = ref({ name: '', cover_path: '' })
@@ -36,7 +39,6 @@ const fetchPlaylistData = async () => {
       
       if (playlist.value.cover_path) {
         try {
-          // Mengambil nama file saja dari path lengkap yang disimpan
           const filename = playlist.value.cover_path.split(/[\\/]/).pop()
           const contents = await readFile(`playlist_covers/${filename}`, { baseDir: BaseDirectory.AppLocalData })
           const blob = new Blob([contents], { type: 'image/jpeg' })
@@ -67,24 +69,18 @@ const uploadCover = async () => {
     })
 
     if (selected && typeof selected === 'string') {
-      // 1. Baca file asli
       const imageContent = await readFile(selected)
-      
-      // 2. Pastikan folder tujuan ada
       await mkdir('playlist_covers', { baseDir: BaseDirectory.AppLocalData, recursive: true })
       
-      // 3. Simpan ke folder lokal aplikasi
       const extension = selected.split('.').pop()
       const newFilename = `playlist_${playlistId}_${Date.now()}.${extension}`
       const targetPath = `playlist_covers/${newFilename}`
       
       await writeFile(targetPath, imageContent, { baseDir: BaseDirectory.AppLocalData })
 
-      // 4. Update database dengan path baru
       const db = await getDB()
       await db.execute("UPDATE playlists SET cover_path = $1 WHERE id = $2", [targetPath, playlistId])
       
-      // 5. Refresh tampilan
       fetchPlaylistData()
     }
   } catch (err) {
@@ -118,7 +114,20 @@ const formatTime = (seconds: number) => {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-onMounted(fetchPlaylistData)
+let unlistenLibrary: any;
+
+onMounted(async () => {
+  await fetchPlaylistData()
+  
+  // Dengar event jika ada lagu yang dihapus dari library agar list terupdate
+  unlistenLibrary = await listen('library-updated', () => {
+    fetchPlaylistData()
+  })
+})
+
+onUnmounted(() => {
+  if (unlistenLibrary) unlistenLibrary()
+})
 </script>
 
 <template>
@@ -187,6 +196,7 @@ onMounted(fetchPlaylistData)
 
       <div v-for="(song, index) in songs" :key="song.id" 
            @click="player.playTrack(song, songs)"
+           @contextmenu.prevent="contextMenu.openMenu($event, song)"
            class="flex items-center px-4 py-3 rounded-xl transition-colors group cursor-pointer"
            :class="[
              isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50',

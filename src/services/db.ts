@@ -6,9 +6,9 @@ export const initDB = async (): Promise<Database> => {
   if (db) return db;
 
   try {
-    // DISINI HARUS SAMA DENGAN DI lib.rs (v2)
-    db = await Database.load("sqlite:emp_player_v2.db");
-    console.log("Database connection established (v2).");
+    // Ganti nama ke emp_player.db agar sinkron dengan Rust
+    db = await Database.load("sqlite:emp_player.db");
+    console.log("Database connection established.");
     return db;
   } catch (error) {
     console.error("Database Load Error:", error);

@@ -21,24 +21,25 @@ const startApp = async () => {
 
   if (isTauri) {
     try {
-
+      // Tunggu database sampai benar-benar siap sebelum membuat app
       await initDB();
       console.log("DB initialized successfully.");
       
-
       const app = createApp(App)
       app.use(createPinia())
       app.use(router)
       app.mount('#app')
 
     } catch (error) {
-    
-      console.error("Critical System Failure:", error);
-   
-      const app = createApp(App)
-      app.use(createPinia())
-      app.use(router)
-      app.mount('#app')
+      console.error("Critical System Failure - Database initialization failed:", error);
+      // Tampilkan pesan eror ke layar atau jangan render app sama sekali
+      document.body.innerHTML = `<div style="color:white; background:#070709; height:100vh; display:flex; align-items:center; justify-content:center; font-family:sans-serif; text-align:center;">
+        <div>
+          <h1 style="color:#ef4444">DATABASE ERROR</h1>
+          <p>Migration mismatch detected. Please delete old .db files in AppData.</p>
+          <pre style="font-size:10px; opacity:0.5">${error}</pre>
+        </div>
+      </div>`;
     }
   } else {
     const app = createApp(App)

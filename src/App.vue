@@ -7,20 +7,30 @@ import Sidebar from './components/layout/Sidebar.vue'
 import TitleBar from './components/layout/TitleBar.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import Toast from './components/Toast.vue'
+import ContextMenu from './components/layout/ContextMenu.vue' // Tambahkan Import
 import { useSettingsStore } from './stores/settings'
 import { usePlayerStore } from './stores/player'
+import { useContextMenuStore } from './stores/contextMenu' // Tambahkan Import
 
 const isMaximized = ref(false)
 const isResizing = ref(false)
 const appWindow = getCurrentWindow()
 const settings = useSettingsStore()
 const player = usePlayerStore()
+const contextMenu = useContextMenuStore() // Inisialisasi store
 const route = useRoute()
 
 const isLyricsPage = computed(() => route.path === '/lyrics')
 
 onMounted(async () => {
   await settings.loadSettingsFromDB()
+  
+  // Mematikan klik kanan bawaan (Inspect Element dkk) secara global
+  window.addEventListener('contextmenu', (e) => e.preventDefault())
+  
+  // Menutup context menu saat klik di mana saja
+  window.addEventListener('click', () => contextMenu.closeMenu())
+
   isMaximized.value = await appWindow.isMaximized()
   await appWindow.onResized(async () => {
     isMaximized.value = await appWindow.isMaximized()
@@ -53,7 +63,7 @@ onMounted(async () => {
           class="absolute inset-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-all duration-500"
           :class="[
             isLyricsPage ? 'p-0' : 'p-8 pt-12',
-            player.currentSong && !isLyricsPage ? 'pb-32' : '' 
+            player.currentSong && !isLyricsPage ? 'pb-32' : 'pb-8' 
           ]"
         >
           <RouterView v-slot="{ Component }">
@@ -67,9 +77,10 @@ onMounted(async () => {
           <PlayerBar v-if="player.currentSong" class="absolute bottom-0 left-0 right-0 z-50" />
         </Transition>
       </div>
-      
     </main>
+
     <Toast />
+    <ContextMenu />
   </AppShell>
 </template>
 

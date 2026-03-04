@@ -16,7 +16,7 @@ const bgSecondary = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.1)'
 </script>
 
 <template>
-  <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 pointer-events-none w-96 items-center">
+  <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] flex flex-col gap-3 pointer-events-none w-96 items-center">
     <TransitionGroup name="toast-slide">
       <div 
         v-for="toast in toastStore.toasts" 
@@ -51,18 +51,17 @@ const bgSecondary = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.1)'
 </template>
 
 <style scoped>
-/* 2. UBAH ANIMASI AGAR MUNCUL DARI ATAS */
 .toast-slide-enter-active,
 .toast-slide-leave-active {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .toast-slide-enter-from {
   opacity: 0;
-  transform: translateY(-40px) scale(0.9); /* Masuk dari atas */
+  transform: translateY(-40px) scale(0.9);
 }
 .toast-slide-leave-to {
   opacity: 0;
-  transform: translateY(-20px) scale(0.9); /* Hilang ke atas */
+  transform: translateY(-20px) scale(0.9);
 }
 
 @keyframes progress-indeterminate {

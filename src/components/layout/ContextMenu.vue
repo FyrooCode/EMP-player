@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useContextMenuStore } from '../../stores/contextMenu'
+import { useToastStore } from '../../stores/toast' // IMPORT TOAST STORE
 import { getDB } from '../../services/db'
 import { emit } from '@tauri-apps/api/event'
 import { 
@@ -8,19 +9,30 @@ import {
 } from 'lucide-vue-next'
 
 const menu = useContextMenuStore()
+const toast = useToastStore() // INISIALISASI
 const isSubMenuVisible = ref(false)
 
 // Fungsi memasukkan lagu ke playlist
 const addToPlaylist = async (playlistId: number) => {
   if (!menu.selectedSong) return
+  
+  // Cari nama playlist untuk pesan toast
+  const targetPlaylist = menu.filteredPlaylists.find(p => p.id === playlistId)
+  const playlistName = targetPlaylist ? targetPlaylist.name : 'Playlist'
+
   try {
     const db = await getDB()
     await db.execute(
       "INSERT OR IGNORE INTO playlist_songs (playlist_id, song_id) VALUES ($1, $2)",
       [playlistId, menu.selectedSong.id]
     )
+    
+    // TAMPILKAN TOAST SUKSES
+    toast.show('success', `Added "${menu.selectedSong.title}" to ${playlistName}`)
+    
   } catch (err) {
     console.error("Gagal tambah ke playlist:", err)
+    toast.show('error', 'Failed to add song to playlist')
   } finally {
     menu.closeMenu()
     isSubMenuVisible.value = false
@@ -30,20 +42,22 @@ const addToPlaylist = async (playlistId: number) => {
 // Fungsi menghapus lagu dari database library
 const deleteFromLibrary = async () => {
   if (!menu.selectedSong) return
-  const confirmDelete = confirm(`Are you sure you want to remove "${menu.selectedSong.title}" from your library?`)
+  const songTitle = menu.selectedSong.title
+  const confirmDelete = confirm(`Are you sure you want to remove "${songTitle}" from your library?`)
   
   if (confirmDelete) {
     try {
       const db = await getDB()
-      // Menghapus baris lagu dari tabel songs
       await db.execute("DELETE FROM songs WHERE id = $1", [menu.selectedSong.id])
       
-      // Mengirimkan event global agar halaman (AlbumView/AllSongsView) tahu ada data yang dihapus
       await emit('library-updated')
       
-      console.log("Song removed from library")
+      // TAMPILKAN TOAST SUKSES HAPUS
+      toast.show('success', `"${songTitle}" removed from library`)
+      
     } catch (err) {
       console.error("Failed to delete song:", err)
+      toast.show('error', 'Failed to remove song from library')
     } finally {
       menu.closeMenu()
     }

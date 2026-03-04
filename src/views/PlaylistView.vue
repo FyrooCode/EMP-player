@@ -4,17 +4,21 @@ import { useRoute, useRouter } from 'vue-router'
 import { getDB } from '../services/db'
 import { useSettingsStore } from '../stores/settings'
 import { usePlayerStore } from '../stores/player' 
-import { useContextMenuStore } from '../stores/contextMenu' // IMPORT STORE CONTEXT MENU
+import { useContextMenuStore } from '../stores/contextMenu'
+import { useToastStore } from '../stores/toast'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { listen } from '@tauri-apps/api/event' // IMPORT LISTEN UNTUK UPDATE DATA
-import { ArrowLeft, Play, Clock, Music, Edit2, Trash2, Camera } from 'lucide-vue-next'
+import { listen } from '@tauri-apps/api/event'
+import { 
+  ArrowLeft, Play, Clock, Music, Edit2, Trash2, Camera, AlertTriangle, X 
+} from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
 const player = usePlayerStore() 
-const contextMenu = useContextMenuStore() // INISIALISASI CONTEXT MENU
+const contextMenu = useContextMenuStore()
+const toast = useToastStore()
 
 const playlistId = route.params.id
 const playlist = ref({ name: '', cover_path: '' })
@@ -22,13 +26,13 @@ const songs = ref<any[]>([])
 const isEditingName = ref(false)
 const newName = ref('')
 const coverUrl = ref<string | null>(null)
+const showDeleteModal = ref(false)
 
 const isDarkMode = computed(() => settings.isDarkMode)
 const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
 const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192, 1)' : '#a0aeb8')
 
-// Fungsi untuk me-load data playlist dan cover-nya
 const fetchPlaylistData = async () => {
   try {
     const db = await getDB()
@@ -60,7 +64,6 @@ const fetchPlaylistData = async () => {
   }
 }
 
-// Fungsi untuk memilih dan mengunggah gambar
 const uploadCover = async () => {
   try {
     const selected = await open({
@@ -82,6 +85,7 @@ const uploadCover = async () => {
       await db.execute("UPDATE playlists SET cover_path = $1 WHERE id = $2", [targetPath, playlistId])
       
       fetchPlaylistData()
+      toast.show('success', 'Playlist cover updated')
     }
   } catch (err) {
     console.error("Upload failed:", err)
@@ -94,16 +98,19 @@ const updateName = async () => {
   await db.execute("UPDATE playlists SET name = $1 WHERE id = $2", [newName.value, playlistId])
   playlist.value.name = newName.value
   isEditingName.value = false
+  toast.show('success', 'Playlist renamed')
 }
 
-const deletePlaylist = async () => {
-  if (!confirm("Are you sure you want to delete this playlist?")) return
+const confirmDeletePlaylist = async () => {
   try {
     const db = await getDB()
     await db.execute("DELETE FROM playlists WHERE id = $1", [playlistId])
+    showDeleteModal.value = false
+    toast.show('success', `Playlist "${playlist.value.name}" deleted`)
     router.push('/collections')
   } catch (err) {
     console.error("Failed to delete playlist:", err)
+    toast.show('error', 'Failed to delete playlist')
   }
 }
 
@@ -118,8 +125,6 @@ let unlistenLibrary: any;
 
 onMounted(async () => {
   await fetchPlaylistData()
-  
-  // Dengar event jika ada lagu yang dihapus dari library agar list terupdate
   unlistenLibrary = await listen('library-updated', () => {
     fetchPlaylistData()
   })
@@ -139,7 +144,7 @@ onUnmounted(() => {
         <span class="text-xs font-bold uppercase tracking-widest">Back</span>
       </button>
 
-      <button @click="deletePlaylist" class="flex items-center gap-2 opacity-40 hover:opacity-100 hover:text-red-500 transition-all cursor-pointer group">
+      <button @click="showDeleteModal = true" class="flex items-center gap-2 opacity-40 hover:opacity-100 hover:text-red-500 transition-all cursor-pointer group">
         <Trash2 :size="18" />
         <span class="text-[10px] font-bold uppercase tracking-widest">Delete Playlist</span>
       </button>
@@ -220,5 +225,55 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showDeleteModal" class="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+          <div 
+            class="w-full max-w-sm rounded-3xl p-8 border shadow-2xl animate-in zoom-in duration-300 transition-colors"
+            :class="isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-black/5'"
+          >
+            <div class="flex flex-col items-center text-center">
+              <div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
+                <AlertTriangle :size="32" />
+              </div>
+              
+              <h3 class="text-xl font-black italic uppercase tracking-tighter mb-2" :style="{ color: textColor }">
+                Delete Playlist?
+              </h3>
+              <p class="text-sm font-bold mb-8 leading-relaxed" :style="{ color: secondaryTextColor }">
+                Are you sure you want to delete <span :style="{ color: textColor }">"{{ playlist.name }}"</span>? This action cannot be undone.
+              </p>
+
+              <div class="flex flex-col w-full gap-3">
+                <button 
+                  @click="confirmDeletePlaylist"
+                  class="w-full py-4 rounded-2xl bg-red-500 hover:bg-red-600 text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+                >
+                  Delete Playlist
+                </button>
+                <button 
+                  @click="showDeleteModal = false"
+                  class="w-full py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
+                  :style="{ color: secondaryTextColor }"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+</style>

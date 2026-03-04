@@ -8,9 +8,8 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
   const y = ref(0)
   const selectedSong = ref<any>(null)
   const playlists = ref<any[]>([])
-  const searchQuery = ref('') // State untuk pencarian playlist
+  const searchQuery = ref('')
 
-  // Logika filter playlist berdasarkan input pencarian
   const filteredPlaylists = computed(() => {
     if (!searchQuery.value) return playlists.value
     return playlists.value.filter(pl => 
@@ -21,7 +20,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
   const openMenu = async (event: MouseEvent, song: any) => {
     isVisible.value = false
     selectedSong.value = song
-    searchQuery.value = '' // Reset pencarian setiap kali menu dibuka
+    searchQuery.value = ''
     
     try {
       const db = await getDB()

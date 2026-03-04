@@ -16,7 +16,7 @@ export const useToastStore = defineStore('toast', () => {
     toasts.value.push({ id, type, message, autoClose })
     
     if (autoClose && type !== 'loading') {
-      setTimeout(() => remove(id), 7500)
+      setTimeout(() => remove(id), 5000) // Diubah ke 5 detik agar tidak terlalu lama
     }
     return id
   }
@@ -25,13 +25,11 @@ export const useToastStore = defineStore('toast', () => {
     toasts.value = toasts.value.filter(t => t.id !== id)
   }
 
-  // Fungsi untuk mengubah status loading menjadi success/error
   const updateStatus = (id: string, type: 'success' | 'error', newMessage: string) => {
     const toast = toasts.value.find(t => t.id === id)
     if (toast) {
       toast.type = type
       toast.message = newMessage
-      // Auto close setelah diubah dari loading
       setTimeout(() => remove(id), 3000)
     }
   }

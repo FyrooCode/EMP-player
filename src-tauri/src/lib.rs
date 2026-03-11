@@ -3,16 +3,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State, Emitter}; // Ditambahkan Emitter untuk event
+use tauri::{AppHandle, Manager, State, Emitter}; 
 use lofty::prelude::*;
 use lofty::probe::Probe;
-use notify::{Watcher, RecursiveMode, Event}; // Membutuhkan crate notify di Cargo.toml
+use notify::{Watcher, RecursiveMode, Event};
 
 // State untuk menyimpan watcher agar tetap hidup selama aplikasi berjalan
 struct WatcherState {
     watcher: Arc<Mutex<Option<notify::RecommendedWatcher>>>,
 }
 
+/**
+ * Fungsi untuk mengekstrak cover album dari metadata file musik
+ */
 fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     if let Ok(tagged_file) = Probe::open(path).unwrap().read() {
         if let Some(tag) = tagged_file.primary_tag() {
@@ -39,6 +42,9 @@ fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     String::new()
 }
 
+/**
+ * Fungsi rekursif untuk mencari file musik di dalam folder dan subfolder
+ */
 fn scan_directory_recursive(
     dir: &Path,
     music_data: &mut Vec<serde_json::Value>,
@@ -105,7 +111,7 @@ fn scan_directory_recursive(
     }
 }
 
-// Command baru untuk memulai pemantauan folder musik secara otomatis
+// Command untuk memantau folder secara real-time
 #[tauri::command]
 async fn start_monitoring(
     path: String,
@@ -113,8 +119,6 @@ async fn start_monitoring(
     state: State<'_, WatcherState>,
 ) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
-    
-    // Hentikan watcher lama jika ada sebelum memulai yang baru
     *watcher_lock = None;
 
     let path_to_watch = PathBuf::from(&path);
@@ -123,24 +127,17 @@ async fn start_monitoring(
     }
 
     let app_handle_clone = app_handle.clone();
-    
-    // Inisialisasi watcher baru
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
         match res {
             Ok(_) => {
-                // Emit event ke frontend bahwa ada perubahan di library
                 let _ = app_handle_clone.emit("library-changed", ());
             },
             Err(e) => println!("Watcher error: {:?}", e),
         }
     }).map_err(|e| e.to_string())?;
 
-    // Mulai memantau folder secara rekursif
     watcher.watch(&path_to_watch, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
-    
-    // Simpan watcher ke dalam state agar tetap aktif
     *watcher_lock = Some(watcher);
-    
     Ok(())
 }
 
@@ -168,37 +165,47 @@ async fn read_lrc_file(path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "initialize_all_tables",
-        sql: "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
-              CREATE TABLE IF NOT EXISTS songs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT, artist TEXT, album TEXT, 
-                path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT,
-                track_num INTEGER DEFAULT 0,
-                disc_num INTEGER DEFAULT 1
-              );
-              CREATE TABLE IF NOT EXISTS playlists (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                cover_path TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-              );
-              CREATE TABLE IF NOT EXISTS playlist_songs (
-                playlist_id INTEGER,
-                song_id INTEGER,
-                FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-                FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE,
-                PRIMARY KEY (playlist_id, song_id)
-              );
-              INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'light');
-              INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');",
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "initialize_all_tables",
+            sql: "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+                  CREATE TABLE IF NOT EXISTS songs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT, artist TEXT, album TEXT, 
+                    path TEXT UNIQUE, duration INTEGER, cover_path TEXT, lyrics TEXT,
+                    track_num INTEGER DEFAULT 0,
+                    disc_num INTEGER DEFAULT 1
+                  );
+                  CREATE TABLE IF NOT EXISTS playlists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    cover_path TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                  );
+                  CREATE TABLE IF NOT EXISTS playlist_songs (
+                    playlist_id INTEGER,
+                    song_id INTEGER,
+                    FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+                    FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE,
+                    PRIMARY KEY (playlist_id, song_id)
+                  );
+                  INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'light');
+                  INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');",
+            kind: MigrationKind::Up,
+        },
+        // MIGRATION VERSI 2: Menambahkan kolom penjejak aktivitas
+        Migration {
+            version: 2,
+            description: "add_tracking_columns",
+            sql: "ALTER TABLE songs ADD COLUMN added_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+                  ALTER TABLE songs ADD COLUMN last_played DATETIME;
+                  ALTER TABLE playlists ADD COLUMN last_played DATETIME;",
+            kind: MigrationKind::Up,
+        }
+    ];
 
     tauri::Builder::default()
-        // Daftarkan WatcherState agar bisa diakses di command start_monitoring
         .manage(WatcherState {
             watcher: Arc::new(Mutex::new(None)),
         })
@@ -209,7 +216,6 @@ pub fn run() {
                 .add_migrations("sqlite:emp_player.db", migrations)
                 .build(),
         )
-        // Pastikan start_monitoring didaftarkan di invoke_handler
         .invoke_handler(tauri::generate_handler![
             scan_music_folder, 
             read_lrc_file, 

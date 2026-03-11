@@ -16,15 +16,12 @@ const isLoading = ref(true)
 const viewMode = computed(() => settings.libraryView)
 
 /**
- * Fungsi utama untuk memuat library album dari database
- * dan memetakan path cover ke URL yang bisa dibaca oleh build produksi.
+ * Memuat library album dari database dan memetakan path cover.
  */
 const loadLibrary = async () => {
   try {
     isLoading.value = true
     const db = await getDB()
-    
-    // Ambil daftar album unik dari database
     const songs = await db.select<{ album: string, artist: string, cover_path: string }[]>(
       "SELECT album, artist, cover_path FROM songs GROUP BY album ORDER BY album ASC"
     )
@@ -34,25 +31,17 @@ const loadLibrary = async () => {
       return
     }
 
-    // Ambil path folder AppData/Local aplikasi (Dinamis untuk semua PC)
     const localDataPath = await appLocalDataDir();
 
     const processedAlbums = await Promise.all(songs.map(async (song) => {
       let coverUrl = null;
       if (song.cover_path) {
         try {
-          // Ekstrak nama file saja dari path yang tersimpan
           const filename = song.cover_path.split(/[\\/]/).pop();
-          // Gabungkan secara absolut ke folder covers di AppData
           const fullPath = await join(localDataPath, 'covers', filename || '');
-          
-          /**
-           * KRUSIAL: convertFileSrc mengubah path sistem (C:\...) menjadi 
-           * URL internal (asset://...) agar tidak diblokir oleh CSP di versi Build.
-           */
           coverUrl = convertFileSrc(fullPath);
         } catch (err) {
-          console.error(`Failed to load cover for album ${song.album}:`, err);
+          console.error(`Failed to load cover:`, err);
         }
       }
       return { ...song, coverUrl }
@@ -69,16 +58,10 @@ const loadLibrary = async () => {
 let unlistenUpdate: any;
 
 onMounted(async () => {
-  // Load data awal
   await loadLibrary();
-
-  // Dengarkan event 'library-updated' (misal setelah scan lagu baru) agar view otomatis refresh
-  unlistenUpdate = await listen('library-updated', () => {
-    loadLibrary();
-  });
+  unlistenUpdate = await listen('library-updated', () => loadLibrary());
 })
 
-// Bersihkan listener saat pindah halaman agar tidak memory leak
 onUnmounted(() => {
   if (unlistenUpdate) unlistenUpdate();
 })
@@ -95,18 +78,22 @@ const goToAlbum = (albumName: string) => {
         Library
       </h1>
 
-      <div class="flex bg-black/5 dark:bg-white/5 p-1 rounded-xl border border-black/5 dark:border-white/10 transition-colors duration-500">
+      <div class="flex bg-black/5 dark:bg-white/5 p-1 rounded-xl border border-black/5 dark:border-white/10 transition-all duration-500">
         <button 
           @click="settings.updateLibraryView('grid')" 
-          class="p-2 rounded-lg transition-all duration-300 cursor-pointer" 
-          :class="viewMode === 'grid' ? 'bg-white dark:bg-slate-800 shadow-md scale-110' : 'opacity-40'"
+          class="p-2 rounded-lg transition-all duration-300 cursor-pointer flex items-center justify-center" 
+          :class="viewMode === 'grid' 
+            ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-md scale-110' 
+            : 'text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'"
         >
           <LayoutGrid :size="18" />
         </button>
         <button 
           @click="settings.updateLibraryView('list')" 
-          class="p-2 rounded-lg transition-all duration-300 cursor-pointer" 
-          :class="viewMode === 'list' ? 'bg-white dark:bg-slate-800 shadow-md scale-110' : 'opacity-40'"
+          class="p-2 rounded-lg transition-all duration-300 cursor-pointer flex items-center justify-center" 
+          :class="viewMode === 'list' 
+            ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-md scale-110' 
+            : 'text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'"
         >
           <List :size="18" />
         </button>
@@ -126,12 +113,7 @@ const goToAlbum = (albumName: string) => {
     <div v-else-if="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-8 animate-view">
       <div v-for="album in albums" :key="album.album" @click="goToAlbum(album.album)" class="group cursor-pointer flex flex-col">
         <div class="relative aspect-square bg-slate-200/50 dark:bg-slate-800/50 rounded-2xl border border-black/5 dark:border-white/10 overflow-hidden flex flex-col items-center justify-center mb-3 transition-all duration-500 hover:shadow-xl">
-          <img 
-            v-if="album.coverUrl" 
-            :src="album.coverUrl" 
-            class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-            alt="cover" 
-          />
+          <img v-if="album.coverUrl" :src="album.coverUrl" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="cover" />
           <div v-else class="text-black/40 dark:text-white/40 italic font-bold flex flex-col items-center gap-2">
             <Disc :size="32" class="opacity-50" />
             <span class="text-[8px] tracking-widest">NO COVER</span>
@@ -154,19 +136,14 @@ const goToAlbum = (albumName: string) => {
           <h3 class="font-bold text-base dark:text-white truncate">{{ album.album }}</h3>
           <p class="text-[10px] font-bold opacity-50 uppercase truncate dark:text-white">{{ album.artist }}</p>
         </div>
-        <ArrowRight :size="18" class="opacity-0 group-hover:opacity-100 transition-all text-slate-400" />
+        <ArrowRight :size="18" class="opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-slate-400" />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.animate-view {
-  animation: fadeIn 0.4s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.animate-view { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 </style>

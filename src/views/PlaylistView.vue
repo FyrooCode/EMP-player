@@ -228,7 +228,7 @@ onUnmounted(() => {
 
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="showDeleteModal" class="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+        <div v-if="showDeleteModal" class="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/40">
           <div 
             class="w-full max-w-sm rounded-3xl p-8 border shadow-2xl animate-in zoom-in duration-300 transition-colors"
             :class="isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-black/5'"

@@ -73,7 +73,7 @@ const deleteFromLibrary = async () => {
       :style="{ top: menu.y + 'px', left: menu.x + 'px' }"
       @click.stop
     >
-      <div class="w-64 bg-slate-900/95 backdrop-blur-xl shadow-2xl rounded-xl border border-white/10 py-1.5 text-white/90">
+      <div class="w-64 bg-slate-900/95 shadow-2xl rounded-xl border border-white/10 py-1.5 text-white/90">
         <div 
           @mouseenter="isSubMenuVisible = true"
           class="flex items-center justify-between px-3 py-2 hover:bg-white/10 cursor-pointer mx-1.5 rounded-lg group"
@@ -100,7 +100,7 @@ const deleteFromLibrary = async () => {
       <div 
         v-if="isSubMenuVisible"
         @mouseleave="isSubMenuVisible = false"
-        class="absolute left-[-264px] w-64 bg-slate-900/98 backdrop-blur-2xl shadow-2xl rounded-xl border border-white/10 overflow-hidden flex flex-col max-h-[480px] animate-in fade-in slide-in-from-right-2 duration-200"
+        class="absolute left-[-264px] w-64 bg-slate-900/98 shadow-2xl rounded-xl border border-white/10 overflow-hidden flex flex-col max-h-[480px] animate-in fade-in slide-in-from-right-2 duration-200"
       >
         <div class="p-3 border-b border-white/5">
           <div class="relative group">

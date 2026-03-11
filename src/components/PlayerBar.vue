@@ -120,7 +120,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-24 flex items-center px-6 gap-6 shrink-0 transition-colors duration-500 z-50 backdrop-blur-xl rounded-main border border-t select-none"
+  <div class="h-24 flex items-center px-6 gap-6 shrink-0 transition-colors duration-500 z-50 rounded-main border border-t select-none"
        :style="{ backgroundColor: bgColor, borderColor: borderColor }">
     
     <div class="flex items-center gap-4 w-1/3 min-w-0">

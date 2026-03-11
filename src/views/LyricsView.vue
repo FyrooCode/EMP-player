@@ -83,7 +83,7 @@ onMounted(() => {
         >
           <button 
             @click="importLrcFile"
-            class="mt-32 flex items-center gap-2 px-6 py-2 bg-white/10 hover:bg-white text-white hover:text-black rounded-full font-bold transition-all duration-300 cursor-pointer shadow-2xl backdrop-blur-md border border-white/10"
+            class="mt-32 flex items-center gap-2 px-6 py-2 bg-white/10 hover:bg-white text-white hover:text-black rounded-full font-bold transition-all duration-300 cursor-pointer shadow-2xl border border-white/10"
           >
             <Plus :size="16" />
             <span class="text-[10px] uppercase tracking-widest">Import Lyrics File</span>

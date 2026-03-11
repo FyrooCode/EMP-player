@@ -21,7 +21,7 @@ const bgSecondary = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.1)'
       <div 
         v-for="toast in toastStore.toasts" 
         :key="toast.id"
-        class="pointer-events-auto w-full overflow-hidden rounded-xl shadow-2xl backdrop-blur-xl border transition-colors duration-500"
+        class="pointer-events-auto w-full overflow-hidden rounded-xl shadow-2xl border transition-colors duration-500"
         :style="{ backgroundColor: bgColor, borderColor: borderColor }"
       >
         <div class="p-4 flex items-start gap-3">

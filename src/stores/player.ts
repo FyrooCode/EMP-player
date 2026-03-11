@@ -2,9 +2,10 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { listen } from '@tauri-apps/api/event'
+import { listen, emit } from '@tauri-apps/api/event' // TAMBAHKAN: emit
 
 import { useSettingsStore } from './settings'
+import { getDB } from '../services/db' 
 
 export const usePlayerStore = defineStore('player', () => {
   // --- STATE ---
@@ -41,7 +42,6 @@ export const usePlayerStore = defineStore('player', () => {
   const getInactiveAudio = () => activeEngine.value === 'A' ? audioB : audioA
 
   // --- LOGIC PARSING LIRIK ---
-  // FIXED: Menambahkan pengecekan tipe data agar lolos build TypeScript
   const parseLyrics = (rawLyrics: string) => {
     if (!rawLyrics) {
       parsedLyrics.value = []
@@ -51,13 +51,10 @@ export const usePlayerStore = defineStore('player', () => {
     const lyricPattern = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
     const result = lines.map(line => {
       const match = lyricPattern.exec(line)
-      
-      // Pastikan match dan grup tangkapan (1-4) ada sebelum diproses
       if (match && match[1] && match[2] && match[3] && match[4] !== undefined) {
         const minutes = parseInt(match[1])
         const seconds = parseInt(match[2])
         const ms = parseInt(match[3])
-        // Kalkulasi waktu dengan mempertimbangkan milidetik (2 atau 3 digit)
         const time = minutes * 60 + seconds + (ms > 99 ? ms / 1000 : ms / 100)
         return { time, text: match[4].trim() }
       }
@@ -65,7 +62,6 @@ export const usePlayerStore = defineStore('player', () => {
     }).filter((item): item is { time: number; text: string } => 
       item !== null && item.text !== ""
     )
-    
     parsedLyrics.value = result
   }
 
@@ -160,7 +156,7 @@ export const usePlayerStore = defineStore('player', () => {
     }, intervalTime)
   }
 
-  const playTrack = async (song: any, contextQueue: any[], useCrossfade: boolean = false) => {
+  const playTrack = async (song: any, contextQueue: any[], useCrossfade: boolean = false, playlistId?: number) => {
     if (fadeInterval) {
       clearInterval(fadeInterval)
       fadeInterval = null
@@ -175,6 +171,20 @@ export const usePlayerStore = defineStore('player', () => {
     crossfadeStarted.value = false 
     
     await loadCover(song.cover_path)
+
+    // --- LOGIK TRACKING AKTIVITAS ---
+    try {
+      const db = await getDB();
+      await db.execute("UPDATE songs SET last_played = CURRENT_TIMESTAMP WHERE id = $1", [song.id]);
+      if (playlistId) {
+        await db.execute("UPDATE playlists SET last_played = CURRENT_TIMESTAMP WHERE id = $1", [playlistId]);
+      }
+      
+      // TRIGGER: Beri tahu Sidebar bahwa ada aktivitas baru
+      await emit('activity-updated'); 
+    } catch (dbErr) {
+      console.error("Failed to update last_played:", dbErr);
+    }
     
     const playableUrl = convertFileSrc(song.path)
     const oldAudio = getActiveAudio()

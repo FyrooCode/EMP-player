@@ -43,7 +43,7 @@ fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
 }
 
 /**
- * Fungsi rekursif untuk mencari file musik di dalam folder dan subfolder
+ * Fungsi rekursif untuk mencari file musik
  */
 fn scan_directory_recursive(
     dir: &Path,
@@ -111,7 +111,56 @@ fn scan_directory_recursive(
     }
 }
 
-// Command untuk memantau folder secara real-time
+// --- COMMANDS BARU UNTUK METADATA ---
+
+#[tauri::command]
+async fn fetch_external_artist_data(artist: String) -> Result<serde_json::Value, String> {
+    let url = format!("https://api.deezer.com/search/artist?q={}", urlencoding::encode(&artist));
+    
+    let client = reqwest::Client::new();
+    let response = client.get(url)
+        .header("User-Agent", "EMP-Player/1.0")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(artist_data) = response["data"].get(0) {
+        return Ok(artist_data.clone());
+    }
+
+    Err("Artist not found".into())
+}
+
+#[tauri::command]
+async fn download_artist_image(url: String, artist_name: String, app_handle: AppHandle) -> Result<String, String> {
+    let local_data = app_handle.path().app_local_data_dir().unwrap_or_default();
+    let artist_dir = local_data.join("artist_images");
+    
+    if !artist_dir.exists() {
+        fs::create_dir_all(&artist_dir).map_err(|e| e.to_string())?;
+    }
+
+    let safe_name = artist_name.replace(|c: char| !c.is_alphanumeric(), "_");
+    let file_path = artist_dir.join(format!("{}.jpg", safe_name));
+
+    // Kalau sudah ada, kembalikan path-nya saja (cache)
+    if file_path.exists() {
+        return Ok(file_path.to_string_lossy().into_owned());
+    }
+
+    let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    
+    fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().into_owned())
+}
+
+// --- COMMANDS LAMA ---
+
 #[tauri::command]
 async fn start_monitoring(
     path: String,
@@ -120,41 +169,23 @@ async fn start_monitoring(
 ) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
     *watcher_lock = None;
-
     let path_to_watch = PathBuf::from(&path);
-    if !path_to_watch.exists() {
-        return Err("Path tidak ditemukan".into());
-    }
-
+    if !path_to_watch.exists() { return Err("Path tidak ditemukan".into()); }
     let app_handle_clone = app_handle.clone();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
-        match res {
-            Ok(_) => {
-                let _ = app_handle_clone.emit("library-changed", ());
-            },
-            Err(e) => println!("Watcher error: {:?}", e),
-        }
+        if res.is_ok() { let _ = app_handle_clone.emit("library-changed", ()); }
     }).map_err(|e| e.to_string())?;
-
     watcher.watch(&path_to_watch, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
     *watcher_lock = Some(watcher);
     Ok(())
 }
 
 #[tauri::command]
-async fn scan_music_folder(
-    folder_path: String,
-    app_handle: AppHandle,
-) -> Result<Vec<serde_json::Value>, String> {
+async fn scan_music_folder(folder_path: String, app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     let mut music_data = Vec::new();
     let path = Path::new(&folder_path);
-
-    if path.is_dir() {
-        scan_directory_recursive(path, &mut music_data, &app_handle);
-    } else {
-        return Err("Path is not a valid directory".to_string());
-    }
-    
+    if path.is_dir() { scan_directory_recursive(path, &mut music_data, &app_handle); }
+    else { return Err("Path is not a valid directory".to_string()); }
     Ok(music_data)
 }
 
@@ -202,11 +233,24 @@ pub fn run() {
                   ALTER TABLE playlists ADD COLUMN last_played DATETIME;",
             kind: MigrationKind::Up,
         },
-        // --- MIGRASI VERSI 3: Tambah kolom play_count ---
         Migration {
             version: 3,
             description: "add_play_count_column",
             sql: "ALTER TABLE songs ADD COLUMN play_count INTEGER DEFAULT 0;",
+            kind: MigrationKind::Up,
+        },
+        // --- MIGRASI VERSI 4: Tabel Artist & Cache Metadata ---
+        Migration {
+            version: 4,
+            description: "add_artist_and_lyrics_cache",
+            sql: "CREATE TABLE IF NOT EXISTS artists (
+                    name TEXT PRIMARY KEY,
+                    image_path TEXT,
+                    bio TEXT,
+                    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+                  );
+                  -- Menambahkan kolom lyrics_content jika ingin memisahkan lirik online dan lirik tag file
+                  ALTER TABLE songs ADD COLUMN online_lyrics TEXT;",
             kind: MigrationKind::Up,
         }
     ];
@@ -225,7 +269,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_music_folder, 
             read_lrc_file, 
-            start_monitoring
+            start_monitoring,
+            fetch_external_artist_data, // Command Baru
+            download_artist_image       // Command Baru
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

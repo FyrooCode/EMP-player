@@ -5,8 +5,11 @@ import { getDB } from '../services/db'
 export const useSettingsStore = defineStore('settings', () => {
   const musicPath = ref('')
   const isDarkMode = ref(false)
-  const crossfade = ref(0) 
-  const libraryView = ref<'grid' | 'list'>('grid') // Default tampilan Grid
+  const crossfade = ref(0)
+  const libraryView = ref<'grid' | 'list'>('grid')
+  
+  // Satpam untuk mencegah database locked
+  const isSaving = ref(false)
 
   async function loadSettingsFromDB() {
     const db = getDB()
@@ -15,7 +18,7 @@ export const useSettingsStore = defineStore('settings', () => {
       if (setting.key === 'music_path') musicPath.value = setting.value
       if (setting.key === 'theme') isDarkMode.value = setting.value === 'dark'
       if (setting.key === 'crossfade') crossfade.value = parseInt(setting.value) || 0
-      if (setting.key === 'library_view') libraryView.value = setting.value as 'grid' | 'list' // Load preferensi view
+      if (setting.key === 'library_view') libraryView.value = setting.value as 'grid' | 'list'
     })
   }
 
@@ -26,24 +29,57 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function saveScannedSongs(songsMetadata: any[]) {
+    // Jika sedang menyimpan, batalkan proses yang baru agar tidak tabrakan
+    if (isSaving.value) {
+      console.warn("Save process already in progress, skipping...");
+      return;
+    }
+
     const db = getDB()
-    await db.execute("DELETE FROM songs")
+    isSaving.value = true;
     
-    for (const song of songsMetadata) {
-      await db.execute(
-        "INSERT OR IGNORE INTO songs (title, artist, album, path, duration, cover_path, lyrics, track_num, disc_num) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-        [
-          song.title, 
-          song.artist, 
-          song.album, 
-          song.path, 
-          song.duration, 
-          song.cover_path, 
-          song.lyrics,
-          song.track_num,
-          song.disc_num
-        ]
-      )
+    try {
+      await db.execute("BEGIN TRANSACTION")
+
+      // Hapus lagu lama
+      await db.execute("DELETE FROM songs")
+
+      const uniqueArtists = new Set<string>()
+
+      for (const song of songsMetadata) {
+        await db.execute(
+          `INSERT OR IGNORE INTO songs (
+            title, artist, album, path, duration, cover_path, lyrics, track_num, disc_num
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            song.title, song.artist, song.album, song.path, 
+            song.duration, song.cover_path, song.lyrics,
+            song.track_num, song.disc_num
+          ]
+        )
+
+        if (song.artist) {
+          const splitResult = song.artist
+            .split(/[,;&]|\bfeat\.|\bft\.|\//i)
+            .map((a: string) => a.trim())
+            .filter((a: string) => a.length > 0)
+          splitResult.forEach((name: string) => uniqueArtists.add(name))
+        }
+      }
+
+      for (const artistName of uniqueArtists) {
+        await db.execute("INSERT OR IGNORE INTO artists (name) VALUES ($1)", [artistName])
+      }
+
+      await db.execute("COMMIT")
+      console.log("Database Sync Success.")
+    } catch (err) {
+      try { await db.execute("ROLLBACK") } catch(e) { /* ignore rollback error */ }
+      console.error("Failed to save scanned songs:", err)
+      throw err
+    } finally {
+      // Pastikan satpam dilepas apapun yang terjadi
+      isSaving.value = false;
     }
   }
 
@@ -55,7 +91,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function updateMusicPath(newPath: string) {
     const db = getDB()
     musicPath.value = newPath
-    await db.execute("UPDATE settings SET value = $1 WHERE key = 'music_path'", [newPath])
+    await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('music_path', $1)", [newPath])
   }
 
   async function toggleTheme() {
@@ -82,7 +118,7 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   return { 
-    musicPath, isDarkMode, crossfade, libraryView,
+    musicPath, isDarkMode, crossfade, libraryView, isSaving,
     loadSettingsFromDB, updateMusicPath, toggleTheme, applyTheme, 
     saveScannedSongs, updateCrossfade, updateSongLyrics, updateLibraryView 
   }

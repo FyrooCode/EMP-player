@@ -22,7 +22,7 @@ const searchInputRef = ref(null)
 const toggleSidebar = () => isExpanded.value = !isExpanded.value
 
 /**
- * FETCH RECENT ACTIVITY
+ * FETCH RECENT ACTIVITY (Relational Version)
  */
 const fetchRecentActivity = async () => {
   try {
@@ -30,11 +30,27 @@ const fetchRecentActivity = async () => {
     const localDataPath = await appLocalDataDir()
 
     const query = `
-      SELECT id, title as name, 'song' as type, COALESCE(last_played, added_at) as activity_time, album, cover_path 
-      FROM songs
+      SELECT 
+        s.id, 
+        s.title as name, 
+        'song' as type, 
+        COALESCE(s.last_played, s.added_at) as activity_time, 
+        al.title as album_name, 
+        al.cover_path 
+      FROM songs s
+      LEFT JOIN albums al ON s.album_id = al.id
+      
       UNION ALL
-      SELECT id, name, 'playlist' as type, COALESCE(last_played, created_at) as activity_time, NULL as album, cover_path
+      
+      SELECT 
+        id, 
+        name, 
+        'playlist' as type, 
+        COALESCE(last_played, created_at) as activity_time, 
+        NULL as album_name, 
+        cover_path
       FROM playlists
+      
       ORDER BY activity_time DESC
       LIMIT 10
     `
@@ -71,7 +87,6 @@ let unlistenLibrary
 
 onMounted(async () => {
   await fetchRecentActivity()
-
   unlistenLibrary = await listen('library-changed', () => fetchRecentActivity())
   unlistenActivity = await listen('activity-updated', () => fetchRecentActivity())
 })
@@ -83,39 +98,38 @@ onUnmounted(() => {
 
 const handleSearchClick = async () => {
   if (!isExpanded.value) isExpanded.value = true
-
   await nextTick()
-
   if (searchInputRef.value) searchInputRef.value.focus()
 }
 
 const handleSearchInput = (e) => {
   const val = e.target.value
-
   searchStore.searchQuery = val
-
   if (val.length > 0) {
     router.push('/search')
     searchStore.performSearch(val)
   }
 }
 
+// Handler Navigasi Manual untuk Recent Items (Tanpa Active State)
+const navigateToRecent = (item) => {
+  const path = item.type === 'playlist' 
+    ? `/playlist/${item.id}` 
+    : `/album/${encodeURIComponent(item.album_name)}`;
+  router.push(path);
+}
+
 const createNewPlaylist = async () => {
   try {
     const db = await getDB()
-
     const existing = await db.select("SELECT COUNT(*) as count FROM playlists")
     const nextNumber = (existing[0].count || 0) + 1
-
     const result = await db.execute(
       "INSERT INTO playlists (name) VALUES ($1)",
       [`My Playlist #${nextNumber}`]
     )
-
     isExpanded.value = true
-
     await fetchRecentActivity()
-
     router.push(`/playlist/${result.lastInsertId}`)
   } catch (err) {
     console.error("Failed to create playlist:", err)
@@ -128,6 +142,7 @@ const createNewPlaylist = async () => {
     class="h-full bg-alice rounded-main flex flex-col shadow-2xl border border-white/10 relative transition-[width] duration-500 ease-in-out group shrink-0"
     :class="isExpanded ? 'w-64' : 'w-20'"
   >
+    <!-- Toggle Button -->
     <button
       @click="toggleSidebar"
       class="absolute -right-3 top-20 w-6 h-6 bg-slate-800 dark:bg-slate-600 text-white rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-transform z-50"
@@ -142,7 +157,7 @@ const createNewPlaylist = async () => {
     </button>
 
     <div class="w-full h-full flex flex-col overflow-hidden px-4">
-
+      <!-- Logo Section -->
       <div
         class="py-8 flex items-center mb-6 shrink-0 h-28 transition-all duration-500 ease-in-out"
         :class="isExpanded ? 'gap-4' : 'gap-0'"
@@ -155,7 +170,7 @@ const createNewPlaylist = async () => {
           class="transition-all duration-500 ease-in-out whitespace-nowrap overflow-hidden flex flex-col justify-center"
           :class="isExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0 pointer-events-none'"
         >
-          <h2 class="font-black text-xl tracking-tighter italic text-slate-800 dark:text-white">
+          <h2 class="font-black text-xl tracking-tighter italic uppercase text-slate-800 dark:text-white">
             EMP
           </h2>
           <p class="text-[8px] font-bold opacity-40 uppercase tracking-[0.2em] text-slate-800 dark:text-white">
@@ -164,8 +179,9 @@ const createNewPlaylist = async () => {
         </div>
       </div>
 
+      <!-- Main Nav -->
       <nav class="flex flex-col gap-2 flex-1 overflow-y-auto no-scrollbar pb-6">
-
+        <!-- Search -->
         <div
           @click="handleSearchClick"
           class="flex items-center p-3 rounded-xl transition-all duration-500 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
@@ -219,6 +235,7 @@ const createNewPlaylist = async () => {
           </span>
         </button>
 
+        <!-- Recent Activity Section -->
         <template v-if="recentItems.length > 0">
           <hr class="border-black/10 dark:border-white/10 my-4" />
 
@@ -230,15 +247,16 @@ const createNewPlaylist = async () => {
           </p>
 
           <div class="flex flex-col gap-1">
-            <RouterLink
+            <!-- DIUBAH DARI RouterLink KE div UNTUK MENGHILANGKAN ACTIVE STATE -->
+            <div
               v-for="item in recentItems"
               :key="item.type + item.id"
-              :to="item.type === 'playlist' ? `/playlist/${item.id}` : `/album/${encodeURIComponent(item.name)}`"
-              class="flex items-center p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-500"
+              @click="navigateToRecent(item)"
+              class="flex items-center p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-all duration-500 group/item"
               :class="isExpanded ? 'gap-4' : 'gap-0'"
             >
-              <div class="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-                <img v-if="item.coverUrl" :src="item.coverUrl" class="w-full h-full object-cover" />
+              <div class="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-slate-800 flex items-center justify-center border border-black/5 dark:border-white/5 shadow-sm">
+                <img v-if="item.coverUrl" :src="item.coverUrl" class="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500" />
                 <ListMusic v-else-if="item.type === 'playlist'" :size="16" class="text-slate-400" />
                 <Music v-else :size="16" class="text-slate-400" />
               </div>
@@ -247,19 +265,19 @@ const createNewPlaylist = async () => {
                 class="flex flex-col min-w-0 transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap"
                 :class="isExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0 pointer-events-none'"
               >
-                <span class="text-[11px] font-bold truncate text-slate-600 dark:text-slate-300">
+                <span class="text-[11px] font-bold truncate text-slate-800 dark:text-slate-200">
                   {{ item.name }}
                 </span>
                 <span class="text-[8px] uppercase opacity-50 font-black tracking-tighter text-slate-500 dark:text-slate-400">
-                  {{ item.type }}
+                  {{ item.type === 'song' ? item.album_name : 'Playlist' }}
                 </span>
               </div>
-            </RouterLink>
+            </div>
           </div>
         </template>
-
       </nav>
 
+      <!-- Bottom Nav -->
       <div class="py-8 border-t border-black/10 dark:border-white/10 shrink-0">
         <RouterLink to="/settings" class="sidebar-link" :class="isExpanded ? 'gap-4' : 'gap-0'" active-class="sidebar-link-active">
           <Settings :size="20" class="shrink-0" />
@@ -281,17 +299,28 @@ const createNewPlaylist = async () => {
   align-items: center;
   padding: 0.75rem;
   border-radius: 0.75rem;
-  transition: all 0.5s ease-in-out;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #64748b;
+}
+
+.sidebar-link:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1e293b;
+}
+
+.dark .sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
 }
 
 .sidebar-link-active {
-  background: #1e293b;
+  background: #0f172a !important;
   color: white !important;
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
 }
 
 .dark .sidebar-link-active {
-  background: #334155;
+  background: #334155 !important;
 }
 
 .animate-spin-slow {

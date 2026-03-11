@@ -2,9 +2,9 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useSettingsStore } from '../stores/settings'
-import { useContextMenuStore } from '../stores/contextMenu' // IMPORT STORE CONTEXT MENU
+import { useContextMenuStore } from '../stores/contextMenu' 
 import { getDB } from '../services/db'
-import { listen } from '@tauri-apps/api/event' // IMPORT LISTEN UNTUK UPDATE DATA
+import { listen } from '@tauri-apps/api/event' 
 import { 
   Music, User, Disc, Clock, Play, Loader2, ArrowLeft 
 } from 'lucide-vue-next'
@@ -13,22 +13,39 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const player = usePlayerStore()
 const settings = useSettingsStore()
-const contextMenu = useContextMenuStore() // INISIALISASI CONTEXT MENU
+const contextMenu = useContextMenuStore() 
 
 const songs = ref<any[]>([])
 const isLoading = ref(true)
 
-// Logika Pewarnaan yang sama dengan AlbumView
 const isDarkMode = computed(() => settings.isDarkMode)
 const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
 const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192, 1)' : '#a0aeb8')
 
+/**
+ * FETCH DENGAN SQL JOIN
+ * Kita mengambil data dari tabel songs, lalu menggabungkannya dengan 
+ * tabel artists dan albums berdasarkan ID-nya.
+ */
 const fetchAllSongs = async () => {
   try {
     isLoading.value = true
     const db = getDB()
-    const result = await db.select<any[]>("SELECT * FROM songs ORDER BY title ASC")
+    
+    // Query Relational: Mengambil nama artist dan title album menggunakan JOIN
+    const query = `
+      SELECT 
+        s.*, 
+        a.name as artist, 
+        al.title as album 
+      FROM songs s
+      LEFT JOIN artists a ON s.artist_id = a.id
+      LEFT JOIN albums al ON s.album_id = al.id
+      ORDER BY s.title ASC
+    `
+    
+    const result = await db.select<any[]>(query)
     songs.value = result
   } catch (err) {
     console.error("Failed to fetch all songs:", err)
@@ -45,6 +62,7 @@ const formatDuration = (seconds: number) => {
 }
 
 const playSong = (song: any) => {
+  // song sudah include .artist dan .album karena alias di SQL (a.name as artist)
   player.playTrack(song, songs.value)
 }
 
@@ -53,7 +71,6 @@ let unlistenLibrary: any;
 onMounted(async () => {
   await fetchAllSongs()
 
-  // Dengar event jika ada lagu yang dihapus dari library agar list terupdate
   unlistenLibrary = await listen('library-updated', () => {
     fetchAllSongs()
   })
@@ -92,7 +109,7 @@ onUnmounted(() => {
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center h-64 gap-4">
       <Loader2 class="animate-spin text-slate-400" :size="32" />
       <p class="text-[10px] font-bold uppercase tracking-widest opacity-40" :style="{ color: textColor }">
-        Reading Database...
+        Reading Relational DB...
       </p>
     </div>
 
@@ -102,6 +119,7 @@ onUnmounted(() => {
     </div>
 
     <div v-else class="space-y-2">
+      <!-- HEADER TABEL -->
       <div class="flex items-center px-4 pb-2 border-b text-[10px] font-bold tracking-widest uppercase transition-colors"
            :class="isDarkMode ? 'border-white/10' : 'border-black/5'"
            :style="{ color: tertiaryTextColor }">
@@ -111,6 +129,7 @@ onUnmounted(() => {
         <div class="w-20 text-right"><Clock :size="14" class="inline" /></div>
       </div>
 
+      <!-- ROW LAGU -->
       <div 
         v-for="(song, index) in songs" 
         :key="song.id"
@@ -122,6 +141,7 @@ onUnmounted(() => {
           player.currentSong?.id === song.id ? (isDarkMode ? 'bg-white/10' : 'bg-slate-200/80') : ''
         ]"
       >
+        <!-- INDEX / PLAY ICON -->
         <div class="w-12 text-center text-xs font-bold relative transition-colors" :style="{ color: tertiaryTextColor }">
           <span :class="{'opacity-0': player.currentSong?.id === song.id}" class="group-hover:opacity-0 transition-opacity">
             {{ index + 1 }}
@@ -137,6 +157,7 @@ onUnmounted(() => {
                 :style="{ color: textColor }" />
         </div>
 
+        <!-- INFO JUDUL & ARTIS -->
         <div class="flex-grow truncate pr-4">
           <p class="font-bold text-sm truncate transition-colors" 
              :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
@@ -148,11 +169,13 @@ onUnmounted(() => {
           </p>
         </div>
 
+        <!-- INFO ALBUM -->
         <div class="hidden md:block w-1/4 truncate text-[10px] font-bold uppercase tracking-widest transition-colors"
              :style="{ color: secondaryTextColor }">
           {{ song.album }}
         </div>
 
+        <!-- DURASI -->
         <div class="w-20 text-right text-xs font-mono transition-colors" :style="{ color: secondaryTextColor }">
           {{ formatDuration(song.duration) }}
         </div>
@@ -163,12 +186,9 @@ onUnmounted(() => {
 
 <style scoped>
 .no-scrollbar::-webkit-scrollbar { display: none; }
-
-/* Menjamin animasi bouncing visualizer tetap lancar */
 .animate-bounce {
   animation: bounce 0.6s infinite alternate;
 }
-
 @keyframes bounce {
   from { transform: scaleY(0.4); }
   to { transform: scaleY(1); }

@@ -8,7 +8,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const crossfade = ref(0)
   const libraryView = ref<'grid' | 'list'>('grid')
   
-  // Satpam untuk mencegah database locked
   const isSaving = ref(false)
 
   async function loadSettingsFromDB() {
@@ -28,64 +27,117 @@ export const useSettingsStore = defineStore('settings', () => {
     await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('library_view', $1)", [view])
   }
 
+  /**
+   * REBORN: Fungsi Simpan Lagu dengan Logika Relasional
+   */
   async function saveScannedSongs(songsMetadata: any[]) {
-    // Jika sedang menyimpan, batalkan proses yang baru agar tidak tabrakan
-    if (isSaving.value) {
-      console.warn("Save process already in progress, skipping...");
-      return;
-    }
+    if (isSaving.value) return;
 
     const db = getDB()
     isSaving.value = true;
     
+    // Cache lokal untuk mempercepat proses ID lookup
+    const artistCache = new Map<string, number>();
+    const albumCache = new Map<string, number>();
+
     try {
       await db.execute("BEGIN TRANSACTION")
 
-      // Hapus lagu lama
+      // Bersihkan data lagu & lirik (Data Artis & Album tidak dihapus agar cache image/bio aman)
       await db.execute("DELETE FROM songs")
-
-      const uniqueArtists = new Set<string>()
+      await db.execute("DELETE FROM lyrics")
 
       for (const song of songsMetadata) {
-        await db.execute(
-          `INSERT OR IGNORE INTO songs (
-            title, artist, album, path, duration, cover_path, lyrics, track_num, disc_num
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            song.title, song.artist, song.album, song.path, 
-            song.duration, song.cover_path, song.lyrics,
-            song.track_num, song.disc_num
-          ]
-        )
+        // --- 1. HANDLING ARTIST ---
+        // Pecah artis jika ada kolaborasi
+        const splitArtists = song.artist
+          .split(/[,;&]|\bfeat\.|\bft\.|\//i)
+          .map((a: string) => a.trim())
+          .filter((a: string) => a.length > 0);
 
-        if (song.artist) {
-          const splitResult = song.artist
-            .split(/[,;&]|\bfeat\.|\bft\.|\//i)
-            .map((a: string) => a.trim())
-            .filter((a: string) => a.length > 0)
-          splitResult.forEach((name: string) => uniqueArtists.add(name))
+        const primaryArtistName = splitArtists[0] || "Unknown Artist";
+        
+        // Daftarkan semua artis yang terlibat ke tabel 'artists'
+        for (const name of splitArtists) {
+          await db.execute("INSERT OR IGNORE INTO artists (name) VALUES ($1)", [name]);
+        }
+
+        // Ambil ID Artis Utama (Primary)
+        let artistId: number;
+        if (artistCache.has(primaryArtistName)) {
+          artistId = artistCache.get(primaryArtistName)!;
+        } else {
+          const res = await db.select<{id: number}[]>("SELECT id FROM artists WHERE name = $1", [primaryArtistName]);
+          artistId = res[0].id;
+          artistCache.set(primaryArtistName, artistId);
+        }
+
+        // --- 2. HANDLING ALBUM ---
+        const albumTitle = song.album || "Unknown Album";
+        const albumKey = `${albumTitle}-${artistId}`;
+        
+        let albumId: number;
+        if (albumCache.has(albumKey)) {
+          albumId = albumCache.get(albumKey)!;
+        } else {
+          // Insert album jika belum ada, masukkan juga cover_path-nya di sini
+          await db.execute(
+            "INSERT OR IGNORE INTO albums (title, artist_id, cover_path) VALUES ($1, $2, $3)",
+            [albumTitle, artistId, song.cover_path]
+          );
+          const res = await db.select<{id: number}[]>(
+            "SELECT id FROM albums WHERE title = $1 AND artist_id = $2", 
+            [albumTitle, artistId]
+          );
+          albumId = res[0].id;
+          albumCache.set(albumKey, albumId);
+        }
+
+        // --- 3. INSERT SONG ---
+        await db.execute(
+          `INSERT INTO songs (
+            title, album_id, artist_id, path, duration, track_num, disc_num
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            song.title, albumId, artistId, song.path, 
+            song.duration, song.track_num, song.disc_num
+          ]
+        );
+
+        // --- 4. INSERT LYRICS ---
+        // Ambil ID lagu yang barusan di-insert
+        const songRes = await db.select<{id: number}[]>("SELECT id FROM songs WHERE path = $1", [song.path]);
+        const songId = songRes[0].id;
+
+        if (song.lyrics) {
+          await db.execute(
+            "INSERT INTO lyrics (song_id, raw_lyrics) VALUES ($1, $2)",
+            [songId, song.lyrics]
+          );
         }
       }
 
-      for (const artistName of uniqueArtists) {
-        await db.execute("INSERT OR IGNORE INTO artists (name) VALUES ($1)", [artistName])
-      }
-
       await db.execute("COMMIT")
-      console.log("Database Sync Success.")
+      console.log("Relational Database Sync Success.")
     } catch (err) {
-      try { await db.execute("ROLLBACK") } catch(e) { /* ignore rollback error */ }
-      console.error("Failed to save scanned songs:", err)
+      await db.execute("ROLLBACK")
+      console.error("Critical Error during scan save:", err)
       throw err
     } finally {
-      // Pastikan satpam dilepas apapun yang terjadi
       isSaving.value = false;
     }
   }
 
-  async function updateSongLyrics(songPath: string, lyrics: string) {
+  /**
+   * Update lirik sekarang menembak tabel 'lyrics'
+   */
+  async function updateSongLyrics(songId: number, lyrics: string, isOnline = false) {
     const db = getDB()
-    await db.execute("UPDATE songs SET lyrics = $1 WHERE path = $2", [lyrics, songPath])
+    if (isOnline) {
+      await db.execute("UPDATE lyrics SET online_lyrics = $1 WHERE song_id = $2", [lyrics, songId])
+    } else {
+      await db.execute("UPDATE lyrics SET raw_lyrics = $1 WHERE song_id = $2", [lyrics, songId])
+    }
   }
 
   async function updateMusicPath(newPath: string) {

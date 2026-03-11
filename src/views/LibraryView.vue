@@ -32,13 +32,14 @@ const sortLabels: Record<string, string> = {
 }
 
 /**
- * Helper untuk resolusi gambar cover
+ * Helper untuk resolusi gambar (Cover Album atau Foto Artis)
  */
-const resolveCover = async (coverPath: string | null, localDataPath: string) => {
-  if (!coverPath) return null;
+const resolveImage = async (path: string | null, type: 'covers' | 'artist_images') => {
+  if (!path) return null;
   try {
-    const filename = coverPath.split(/[\\/]/).pop();
-    const fullPath = await join(localDataPath, 'covers', filename || '');
+    const localDataPath = await appLocalDataDir();
+    const filename = path.split(/[\\/]/).pop();
+    const fullPath = await join(localDataPath, type, filename || '');
     return convertFileSrc(fullPath);
   } catch {
     return null;
@@ -46,64 +47,55 @@ const resolveCover = async (coverPath: string | null, localDataPath: string) => 
 }
 
 /**
- * Memuat library berdasarkan Tab dan Sort yang dipilih
+ * Memuat library berdasarkan Tab dan Sort yang dipilih (Relational Mode)
  */
 const loadLibrary = async () => {
   try {
     isLoading.value = true
     const db = await getDB()
-    const localDataPath = await appLocalDataDir();
     
     if (activeTab.value === 'albums') {
       // --- LOGIC ALBUM ---
-      let orderClause = "ORDER BY album ASC"
-      if (sortBy.value === 'artist') orderClause = "ORDER BY artist ASC"
-      if (sortBy.value === 'added') orderClause = "ORDER BY MAX(added_at) DESC"
-      if (sortBy.value === 'played') orderClause = "ORDER BY MAX(last_played) DESC"
+      // Kita JOIN dengan tabel artists untuk mendapatkan nama artist
+      let orderClause = "ORDER BY al.title ASC"
+      if (sortBy.value === 'artist') orderClause = "ORDER BY ar.name ASC"
+      if (sortBy.value === 'added') orderClause = "ORDER BY (SELECT MAX(added_at) FROM songs WHERE album_id = al.id) DESC"
+      if (sortBy.value === 'played') orderClause = "ORDER BY (SELECT MAX(last_played) FROM songs WHERE album_id = al.id) DESC"
 
-      const query = `SELECT album as name, artist, cover_path FROM songs GROUP BY album ${orderClause}`
+      const query = `
+        SELECT 
+          al.title as name, 
+          ar.name as artist, 
+          al.cover_path 
+        FROM albums al
+        JOIN artists ar ON al.artist_id = ar.id
+        ${orderClause}
+      `
       const data = await db.select<any[]>(query)
       
       items.value = await Promise.all(data.map(async (item) => ({
         ...item,
-        coverUrl: await resolveCover(item.cover_path, localDataPath)
+        coverUrl: await resolveImage(item.cover_path, 'covers')
       })))
 
     } else {
-      // --- LOGIC ARTIST (FIXED SPLITTING) ---
-      const rawSongs = await db.select<any[]>("SELECT artist, album, cover_path FROM songs")
-      const artistMap = new Map();
+      // --- LOGIC ARTIST ---
+      // Kita ambil langsung dari tabel artists
+      // sub_text akan berisi jumlah album yang dimiliki artis tsb
+      const query = `
+        SELECT 
+          ar.name, 
+          ar.image_path as cover_path,
+          (SELECT COUNT(*) FROM albums WHERE artist_id = ar.id) as sub_text
+        FROM artists ar
+        ORDER BY ar.name ASC
+      `
+      const data = await db.select<any[]>(query)
 
-      rawSongs.forEach(song => {
-        if (!song.artist) return;
-        const individualArtists = song.artist
-          .split(/[,;&]|\bfeat\.|\bft\.|\//i) 
-          .map((a: string) => a.trim())
-          .filter((a: string) => a.length > 0);
-
-        individualArtists.forEach((artistName: string) => {
-          if (!artistMap.has(artistName)) {
-            artistMap.set(artistName, {
-              name: artistName,
-              albums: new Set(),
-              cover_path: song.cover_path
-            });
-          }
-          artistMap.get(artistName).albums.add(song.album);
-        });
-      });
-
-      const processedArtists = Array.from(artistMap.values())
-        .map(artist => ({
-          name: artist.name,
-          sub_text: artist.albums.size,
-          cover_path: artist.cover_path
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-      items.value = await Promise.all(processedArtists.map(async (item) => ({
+      items.value = await Promise.all(data.map(async (item) => ({
         ...item,
-        coverUrl: await resolveCover(item.cover_path, localDataPath)
+        // Cek foto artis dulu, kalau tidak ada kita bisa fallback (nanti)
+        coverUrl: await resolveImage(item.cover_path, 'artist_images')
       })))
     }
   } catch (error) {
@@ -215,19 +207,18 @@ const handleItemClick = (item: any) => {
       <span class="text-[10px] uppercase tracking-widest opacity-60">Please scan your music folder in Settings</span>
     </div>
 
-    <!-- GRID VIEW (DENGAN ANIMASI HOVER KLASIK) -->
+    <!-- GRID VIEW -->
     <div v-else-if="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-8 animate-view">
       <div v-for="item in items" :key="item.name" @click="handleItemClick(item)" class="group cursor-pointer flex flex-col">
-        <!-- Container Cover dengan Shadow & Rounding 2xl -->
         <div class="relative aspect-square bg-slate-200/50 dark:bg-slate-800/50 rounded-2xl border border-black/5 dark:border-white/10 overflow-hidden flex flex-col items-center justify-center mb-3 transition-all duration-500 hover:shadow-xl">
-          <!-- Image dengan Scale-110 saat group hover -->
           <img v-if="item.coverUrl" :src="item.coverUrl" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="cover" />
           <div v-else class="text-black/40 dark:text-white/40 italic font-bold flex flex-col items-center gap-2">
-            <Disc :size="32" class="opacity-50" />
-            <span class="text-[8px] tracking-widest">NO COVER</span>
+            <!-- Icon berubah tergantung Tab -->
+            <ArtistIcon v-if="activeTab === 'artists'" :size="32" class="opacity-50" />
+            <Disc v-else :size="32" class="opacity-50" />
+            <span class="text-[8px] tracking-widest">NO IMAGE</span>
           </div>
         </div>
-        <!-- Info Text -->
         <div class="px-1">
           <p class="text-slate-900 dark:text-white font-bold text-sm truncate uppercase tracking-tighter">{{ item.name }}</p>
           <p v-if="activeTab === 'albums'" class="text-slate-500 dark:text-white/60 text-[10px] font-bold uppercase truncate tracking-widest">
@@ -246,6 +237,7 @@ const handleItemClick = (item: any) => {
            class="flex items-center gap-4 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer group transition-all duration-300">
         <div class="w-14 h-14 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 flex-shrink-0 flex items-center justify-center overflow-hidden border border-black/5 dark:border-white/10">
           <img v-if="item.coverUrl" :src="item.coverUrl" class="w-full h-full object-cover" />
+          <ArtistIcon v-else-if="activeTab === 'artists'" :size="20" class="opacity-20 dark:text-white" />
           <Disc v-else :size="20" class="opacity-20 dark:text-white" />
         </div>
         <div class="flex-grow min-w-0">

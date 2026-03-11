@@ -18,17 +18,20 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
   })
 
   const openMenu = async (event: MouseEvent, song: any) => {
+    // Tutup dulu jika sedang terbuka (reset state)
     isVisible.value = false
     selectedSong.value = song
     searchQuery.value = ''
     
     try {
-      const db = await getDB()
+      const db = getDB()
+      // Mengambil playlist terbaru
       playlists.value = await db.select<any[]>("SELECT * FROM playlists ORDER BY created_at DESC")
     } catch (err) {
       console.error("Gagal load playlist:", err)
     }
     
+    // Set posisi munculnya menu
     x.value = event.clientX
     y.value = event.clientY
     isVisible.value = true

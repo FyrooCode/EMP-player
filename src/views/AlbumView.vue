@@ -23,22 +23,30 @@ const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
 const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192, 1)' : '#a0aeb8')
 
+/**
+ * FETCH DETAIL ALBUM & LAGU (Relational Version)
+ */
 const fetchAlbumDetails = async () => {
   try {
     const db = await getDB()
-    const result = await db.select<any[]>(
-      "SELECT * FROM songs WHERE album = $1 ORDER BY disc_num ASC, track_num ASC",
+    
+    // 1. Ambil Info Album & Artis Utama
+    const albumRes = await db.select<any[]>(
+      `SELECT al.*, ar.name as artist_name 
+       FROM albums al 
+       JOIN artists ar ON al.artist_id = ar.id 
+       WHERE al.title = $1 LIMIT 1`,
       [albumName.value]
     )
-    songs.value = result
 
-    if (result.length > 0) {
-      albumInfo.value.artist = result[0].artist
+    if (albumRes.length > 0) {
+      const albumData = albumRes[0]
+      albumInfo.value.artist = albumData.artist_name
       
-      const coverPath = result[0].cover_path
-      if (coverPath) {
+      // Load Cover dari path yang tersimpan di tabel albums
+      if (albumData.cover_path) {
         try {
-          const filename = coverPath.split(/[\\/]/).pop();
+          const filename = albumData.cover_path.split(/[\\/]/).pop();
           const relativePath = `covers/${filename}`;
           const contents = await readFile(relativePath, { baseDir: BaseDirectory.AppLocalData });
           const blob = new Blob([contents], { type: 'image/jpeg' });
@@ -47,6 +55,25 @@ const fetchAlbumDetails = async () => {
           console.error("Gagal load cover album:", err);
         }
       }
+
+      // 2. Ambil Semua Lagu di Album ini (Join dengan Artist & Lyrics)
+      // Kita butuh 'lyrics' agar player bisa langsung menampilkan lirik saat lagu diklik
+      const songsRes = await db.select<any[]>(
+        `SELECT 
+          s.*, 
+          ar.name as artist, 
+          al.title as album,
+          l.raw_lyrics as lyrics,
+          l.online_lyrics
+         FROM songs s
+         JOIN artists ar ON s.artist_id = ar.id
+         JOIN albums al ON s.album_id = al.id
+         LEFT JOIN lyrics l ON s.id = l.song_id
+         WHERE s.album_id = $1 
+         ORDER BY s.disc_num ASC, s.track_num ASC`,
+        [albumData.id]
+      )
+      songs.value = songsRes
     }
   } catch (error) {
     console.error("Gagal memuat detail album:", error)
@@ -70,13 +97,11 @@ const goBack = () => { router.back() }
 <template>
   <div class="relative h-full overflow-y-auto pb-20 no-scrollbar">
     
-    <!-- BACK BUTTON -->
     <button @click="goBack" class="flex items-center gap-2 transition-colors mb-8 group cursor-pointer" :style="{ color: secondaryTextColor }">
       <ArrowLeft :size="20" class="group-hover:-translate-x-1 transition-transform" />
       <span class="text-xs font-bold uppercase tracking-widest">Back to Library</span>
     </button>
 
-    <!-- HEADER ALBUM (Shadow Dihilangkan dari sini) -->
     <div class="flex flex-col md:flex-row gap-8 mb-12 items-end px-2">
       <div class="w-48 h-48 rounded-2xl overflow-hidden flex-shrink-0 border flex items-center justify-center transition-colors" 
            :class="isDarkMode ? 'bg-slate-800/50 border-white/10' : 'bg-slate-200/50 border-black/5'">
@@ -94,9 +119,7 @@ const goBack = () => { router.back() }
       </div>
     </div>
 
-    <!-- LIST LAGU -->
     <div class="space-y-2">
-      <!-- HEADER TABEL -->
       <div class="flex items-center px-4 pb-2 border-b text-[10px] font-bold tracking-widest uppercase transition-colors"
            :class="isDarkMode ? 'border-white/10' : 'border-black/5'"
            :style="{ color: tertiaryTextColor }">
@@ -106,7 +129,6 @@ const goBack = () => { router.back() }
         <div class="w-20 text-right"><Clock :size="14" class="inline" /></div>
       </div>
 
-      <!-- DAFTAR LAGU -->
       <div v-for="(song, index) in songs" :key="song.id" 
            @click="player.playTrack(song, songs)"
            @contextmenu.prevent="contextMenu.openMenu($event, song)"

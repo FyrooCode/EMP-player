@@ -25,12 +25,9 @@ export const usePlayerStore = defineStore('player', () => {
   const currentIndex = ref(-1)
   const parsedLyrics = ref<{ time: number; text: string }[]>([])
 
-  // Tracking untuk Play Count (Agar tidak terhitung dua kali di lagu yang sama)
   const hasCountedPlay = ref(false)
 
-  // ==========================================
-  // DUAL-ENGINE AUDIO (DECK A & DECK B)
-  // ==========================================
+  // --- AUDIO ENGINES ---
   const audioA = new Audio()
   const audioB = new Audio()
   
@@ -44,7 +41,7 @@ export const usePlayerStore = defineStore('player', () => {
   const getActiveAudio = () => activeEngine.value === 'A' ? audioA : audioB
   const getInactiveAudio = () => activeEngine.value === 'A' ? audioB : audioA
 
-  // --- LOGIC PARSING LIRIK ---
+  // --- LYRIC PARSER ---
   const parseLyrics = (rawLyrics: string) => {
     if (!rawLyrics) {
       parsedLyrics.value = []
@@ -75,7 +72,7 @@ export const usePlayerStore = defineStore('player', () => {
         const settings = useSettingsStore()
         const cfDuration = settings.crossfade
         
-        // --- LOGIKA PLAY COUNT 75% ---
+        // --- PLAY COUNT 75% ---
         if (!hasCountedPlay.value && audio.duration > 0 && currentSong.value) {
             if (audio.currentTime >= audio.duration * 0.75) {
                 hasCountedPlay.value = true;
@@ -114,12 +111,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   // --- ACTIONS ---
   
-  // Fungsi untuk update play count ke database
   const incrementPlayCount = async (songId: number) => {
     try {
         const db = await getDB();
         await db.execute("UPDATE songs SET play_count = play_count + 1 WHERE id = $1", [songId]);
-        console.log(`Play count incremented for song ID: ${songId}`);
     } catch (err) {
         console.error("Failed to increment play count:", err);
     }
@@ -185,32 +180,45 @@ export const usePlayerStore = defineStore('player', () => {
       fadeInterval = null
     }
 
+    const db = await getDB();
     const settings = useSettingsStore()
+
+    // --- RELATIONAL HYDRATION ---
+    // Jika lirik atau cover tidak disertakan dalam objek 'song' (misal dari view yang simpel), kita ambil dari DB.
+    if (song.lyrics === undefined || song.cover_path === undefined) {
+      try {
+        const meta = await db.select<any[]>(`
+          SELECT l.raw_lyrics, al.cover_path 
+          FROM songs s 
+          LEFT JOIN lyrics l ON s.id = l.song_id 
+          LEFT JOIN albums al ON s.album_id = al.id 
+          WHERE s.id = $1`, [song.id]);
+        
+        if (meta.length > 0) {
+          song.lyrics = meta[0].raw_lyrics;
+          song.cover_path = meta[0].cover_path;
+        }
+      } catch (e) { console.error("Metadata hydration failed", e) }
+    }
+
     queue.value = contextQueue
     currentIndex.value = queue.value.findIndex(s => s.id === song.id)
     currentSong.value = song
     
-    // Reset status hitungan play count saat ganti lagu
     hasCountedPlay.value = false 
-
     parseLyrics(song.lyrics || "") 
     crossfadeStarted.value = false 
     
     await loadCover(song.cover_path)
 
-    // --- LOGIK TRACKING AKTIVITAS ---
+    // --- ACTIVITY TRACKING ---
     try {
-      const db = await getDB();
       await db.execute("UPDATE songs SET last_played = CURRENT_TIMESTAMP WHERE id = $1", [song.id]);
       if (playlistId) {
         await db.execute("UPDATE playlists SET last_played = CURRENT_TIMESTAMP WHERE id = $1", [playlistId]);
       }
-      
-      // TRIGGER: Beri tahu Sidebar bahwa ada aktivitas baru
       await emit('activity-updated'); 
-    } catch (dbErr) {
-      console.error("Failed to update last_played:", dbErr);
-    }
+    } catch (dbErr) { console.error(dbErr); }
     
     const playableUrl = convertFileSrc(song.path)
     const oldAudio = getActiveAudio()
@@ -281,7 +289,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  // --- SHORTCUT LISTENERS ---
+  // --- SHORTCUTS ---
   listen('media-toggle', () => togglePlay())
   listen('media-next', () => nextTrack(false))
   listen('media-prev', () => prevTrack())

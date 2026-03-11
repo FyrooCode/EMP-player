@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useContextMenuStore } from '../../stores/contextMenu'
-import { useToastStore } from '../../stores/toast' // IMPORT TOAST STORE
+import { useToastStore } from '../../stores/toast'
 import { getDB } from '../../services/db'
 import { emit } from '@tauri-apps/api/event'
 import { 
@@ -9,27 +9,27 @@ import {
 } from 'lucide-vue-next'
 
 const menu = useContextMenuStore()
-const toast = useToastStore() // INISIALISASI
+const toast = useToastStore()
 const isSubMenuVisible = ref(false)
 
-// Fungsi memasukkan lagu ke playlist
+/**
+ * Tambah lagu ke playlist (Relational: playlist_songs)
+ */
 const addToPlaylist = async (playlistId: number) => {
   if (!menu.selectedSong) return
   
-  // Cari nama playlist untuk pesan toast
   const targetPlaylist = menu.filteredPlaylists.find(p => p.id === playlistId)
   const playlistName = targetPlaylist ? targetPlaylist.name : 'Playlist'
 
   try {
-    const db = await getDB()
+    const db = getDB()
+    // INSERT ke tabel relasi. ON DELETE CASCADE akan mengurus ini jika lagu dihapus nanti.
     await db.execute(
       "INSERT OR IGNORE INTO playlist_songs (playlist_id, song_id) VALUES ($1, $2)",
       [playlistId, menu.selectedSong.id]
     )
     
-    // TAMPILKAN TOAST SUKSES
     toast.show('success', `Added "${menu.selectedSong.title}" to ${playlistName}`)
-    
   } catch (err) {
     console.error("Gagal tambah ke playlist:", err)
     toast.show('error', 'Failed to add song to playlist')
@@ -39,22 +39,26 @@ const addToPlaylist = async (playlistId: number) => {
   }
 }
 
-// Fungsi menghapus lagu dari database library
+/**
+ * Hapus lagu dari Library (Relational: Cascade akan membersihkan Lyrics & Playlist refs)
+ */
 const deleteFromLibrary = async () => {
   if (!menu.selectedSong) return
   const songTitle = menu.selectedSong.title
-  const confirmDelete = confirm(`Are you sure you want to remove "${songTitle}" from your library?`)
   
-  if (confirmDelete) {
+  // Konfirmasi hapus (Native Browser Confirm)
+  if (confirm(`Are you sure you want to remove "${songTitle}" from your library?`)) {
     try {
-      const db = await getDB()
+      const db = getDB()
+      // Karena migrasi kita pakai ON DELETE CASCADE, maka:
+      // 1. Data di 'playlist_songs' akan ikut terhapus
+      // 2. Data lirik di tabel 'lyrics' akan ikut terhapus
       await db.execute("DELETE FROM songs WHERE id = $1", [menu.selectedSong.id])
       
+      // Emit ke halaman lain (Library, AllSongs, Sidebar) agar refresh data
       await emit('library-updated')
       
-      // TAMPILKAN TOAST SUKSES HAPUS
       toast.show('success', `"${songTitle}" removed from library`)
-      
     } catch (err) {
       console.error("Failed to delete song:", err)
       toast.show('error', 'Failed to remove song from library')
@@ -73,14 +77,15 @@ const deleteFromLibrary = async () => {
       :style="{ top: menu.y + 'px', left: menu.x + 'px' }"
       @click.stop
     >
-      <div class="w-64 bg-slate-900/95 shadow-2xl rounded-xl border border-white/10 py-1.5 text-white/90">
+      <!-- MAIN MENU -->
+      <div class="w-64 bg-slate-900/95 backdrop-blur-xl shadow-2xl rounded-xl border border-white/10 py-1.5 text-white/90">
         <div 
           @mouseenter="isSubMenuVisible = true"
           class="flex items-center justify-between px-3 py-2 hover:bg-white/10 cursor-pointer mx-1.5 rounded-lg group"
         >
           <div class="flex items-center gap-3">
-            <Plus :size="18" />
-            <span class="text-xs font-semibold">Add to playlist</span>
+            <Plus :size="18" class="text-white/50 group-hover:text-white" />
+            <span class="text-xs font-semibold uppercase tracking-widest">Add to playlist</span>
           </div>
           <ChevronRight :size="14" class="opacity-40" />
         </div>
@@ -92,11 +97,13 @@ const deleteFromLibrary = async () => {
             @click="deleteFromLibrary"
             class="flex items-center gap-3 px-3 py-2 hover:bg-red-500/20 hover:text-red-400 cursor-pointer rounded-lg text-xs font-semibold transition-colors"
           >
-            <Trash2 :size="18" /> Delete from library
+            <Trash2 :size="18" /> 
+            <span class="uppercase tracking-widest">Delete from library</span>
           </div>
         </div>
       </div>
 
+      <!-- SUB-MENU (PLAYLIST SELECTION) -->
       <div 
         v-if="isSubMenuVisible"
         @mouseleave="isSubMenuVisible = false"
@@ -108,9 +115,8 @@ const deleteFromLibrary = async () => {
             <input 
               v-model="menu.searchQuery"
               type="text"
-              placeholder="Find a playlist"
+              placeholder="Find a playlist..."
               class="w-full bg-white/5 border-none outline-none rounded-md py-2 pl-9 pr-3 text-xs text-white placeholder:text-white/20 focus:bg-white/10 transition-colors"
-              autoFocus
             />
           </div>
         </div>
@@ -121,16 +127,16 @@ const deleteFromLibrary = async () => {
               v-for="pl in menu.filteredPlaylists" 
               :key="pl.id"
               @click="addToPlaylist(pl.id)"
-              class="w-full text-left px-3 py-2.5 text-xs font-semibold hover:bg-white/10 rounded-lg flex items-center gap-3 transition-colors truncate"
+              class="w-full text-left px-3 py-2.5 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white rounded-lg flex items-center gap-3 transition-colors truncate"
             >
-              <div class="w-8 h-8 bg-white/5 rounded flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 bg-white/5 rounded flex items-center justify-center shrink-0 group-hover:bg-white/20">
                 <ListMusic :size="16" class="opacity-40" />
               </div>
               <span class="truncate">{{ pl.name }}</span>
             </button>
           </div>
 
-          <div v-if="menu.filteredPlaylists.length === 0" class="p-8 text-center opacity-30 text-[10px] uppercase font-bold tracking-widest">
+          <div v-if="menu.filteredPlaylists.length === 0" class="p-8 text-center opacity-30 text-[8px] uppercase font-bold tracking-[0.3em]">
             No playlist found
           </div>
         </div>
@@ -152,5 +158,10 @@ const deleteFromLibrary = async () => {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animasi tambahan Tailwind */
+.animate-in {
+  animation-duration: 150ms;
 }
 </style>

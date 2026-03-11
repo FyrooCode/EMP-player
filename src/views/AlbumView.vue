@@ -6,7 +6,7 @@ import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settings'
 import { usePlayerStore } from '../stores/player' 
 import { useContextMenuStore } from '../stores/contextMenu' 
-import { ArrowLeft, Play, Clock, Disc } from 'lucide-vue-next'
+import { ArrowLeft, Play, Clock, Disc, BarChart2 } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,10 +23,9 @@ const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
 const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192, 1)' : '#a0aeb8')
 
-onMounted(async () => {
+const fetchAlbumDetails = async () => {
   try {
     const db = await getDB()
-    // Urutkan berdasarkan Disc Number dulu, baru Track Number
     const result = await db.select<any[]>(
       "SELECT * FROM songs WHERE album = $1 ORDER BY disc_num ASC, track_num ASC",
       [albumName.value]
@@ -52,6 +51,10 @@ onMounted(async () => {
   } catch (error) {
     console.error("Gagal memuat detail album:", error)
   }
+}
+
+onMounted(() => {
+  fetchAlbumDetails()
 })
 
 const formatTime = (seconds: number) => {
@@ -67,13 +70,15 @@ const goBack = () => { router.back() }
 <template>
   <div class="relative h-full overflow-y-auto pb-20 no-scrollbar">
     
+    <!-- BACK BUTTON -->
     <button @click="goBack" class="flex items-center gap-2 transition-colors mb-8 group cursor-pointer" :style="{ color: secondaryTextColor }">
       <ArrowLeft :size="20" class="group-hover:-translate-x-1 transition-transform" />
       <span class="text-xs font-bold uppercase tracking-widest">Back to Library</span>
     </button>
 
+    <!-- HEADER ALBUM (Shadow Dihilangkan dari sini) -->
     <div class="flex flex-col md:flex-row gap-8 mb-12 items-end px-2">
-      <div class="w-48 h-48 rounded-2xl overflow-hidden shadow-2xl flex-shrink-0 border flex items-center justify-center transition-colors" 
+      <div class="w-48 h-48 rounded-2xl overflow-hidden flex-shrink-0 border flex items-center justify-center transition-colors" 
            :class="isDarkMode ? 'bg-slate-800/50 border-white/10' : 'bg-slate-200/50 border-black/5'">
         <img v-if="albumInfo.coverUrl" :src="albumInfo.coverUrl" class="w-full h-full object-cover" />
         <Disc v-else :size="48" :class="isDarkMode ? 'text-white/20' : 'text-black/20'" />
@@ -89,15 +94,19 @@ const goBack = () => { router.back() }
       </div>
     </div>
 
+    <!-- LIST LAGU -->
     <div class="space-y-2">
+      <!-- HEADER TABEL -->
       <div class="flex items-center px-4 pb-2 border-b text-[10px] font-bold tracking-widest uppercase transition-colors"
            :class="isDarkMode ? 'border-white/10' : 'border-black/5'"
            :style="{ color: tertiaryTextColor }">
         <div class="w-12 text-center">#</div>
         <div class="flex-grow">Title</div>
+        <div class="w-16 text-center"><BarChart2 :size="14" class="inline" /></div>
         <div class="w-20 text-right"><Clock :size="14" class="inline" /></div>
       </div>
 
+      <!-- DAFTAR LAGU -->
       <div v-for="(song, index) in songs" :key="song.id" 
            @click="player.playTrack(song, songs)"
            @contextmenu.prevent="contextMenu.openMenu($event, song)"
@@ -123,10 +132,17 @@ const goBack = () => { router.back() }
         </div>
 
         <div class="flex-grow text-sm font-bold transition-colors flex items-center gap-2" :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
-          <span>{{ song.title }}</span>
-          <span v-if="song.disc_num > 1" class="text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 opacity-50 uppercase tracking-tighter">
+          <span class="truncate">{{ song.title }}</span>
+          <span v-if="song.disc_num > 1" class="text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 opacity-50 uppercase tracking-tighter shrink-0">
             Disc {{ song.disc_num }}
           </span>
+        </div>
+
+        <div class="w-16 text-center text-[10px] font-black transition-colors" :style="{ color: tertiaryTextColor }">
+          <span v-if="song.play_count > 0" class="opacity-80">
+            {{ song.play_count }} <span class="text-[8px] opacity-40">PLAYS</span>
+          </span>
+          <span v-else class="opacity-20">-</span>
         </div>
 
         <div class="w-20 text-right text-xs font-mono transition-colors" :style="{ color: secondaryTextColor }">

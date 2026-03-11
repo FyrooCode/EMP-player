@@ -194,13 +194,19 @@ pub fn run() {
                   INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');",
             kind: MigrationKind::Up,
         },
-        // MIGRATION VERSI 2: Menambahkan kolom penjejak aktivitas
         Migration {
             version: 2,
             description: "add_tracking_columns",
             sql: "ALTER TABLE songs ADD COLUMN added_at DATETIME DEFAULT CURRENT_TIMESTAMP;
                   ALTER TABLE songs ADD COLUMN last_played DATETIME;
                   ALTER TABLE playlists ADD COLUMN last_played DATETIME;",
+            kind: MigrationKind::Up,
+        },
+        // --- MIGRASI VERSI 3: Tambah kolom play_count ---
+        Migration {
+            version: 3,
+            description: "add_play_count_column",
+            sql: "ALTER TABLE songs ADD COLUMN play_count INTEGER DEFAULT 0;",
             kind: MigrationKind::Up,
         }
     ];

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { listen, emit } from '@tauri-apps/api/event' // TAMBAHKAN: emit
+import { listen, emit } from '@tauri-apps/api/event'
 
 import { useSettingsStore } from './settings'
 import { getDB } from '../services/db' 
@@ -24,6 +24,9 @@ export const usePlayerStore = defineStore('player', () => {
   const queue = ref<any[]>([])
   const currentIndex = ref(-1)
   const parsedLyrics = ref<{ time: number; text: string }[]>([])
+
+  // Tracking untuk Play Count (Agar tidak terhitung dua kali di lagu yang sama)
+  const hasCountedPlay = ref(false)
 
   // ==========================================
   // DUAL-ENGINE AUDIO (DECK A & DECK B)
@@ -72,6 +75,14 @@ export const usePlayerStore = defineStore('player', () => {
         const settings = useSettingsStore()
         const cfDuration = settings.crossfade
         
+        // --- LOGIKA PLAY COUNT 75% ---
+        if (!hasCountedPlay.value && audio.duration > 0 && currentSong.value) {
+            if (audio.currentTime >= audio.duration * 0.75) {
+                hasCountedPlay.value = true;
+                incrementPlayCount(currentSong.value.id);
+            }
+        }
+
         if (cfDuration > 0 && audio.duration > 0 && !audio.paused) {
           const timeLeft = audio.duration - audio.currentTime
           if (timeLeft <= cfDuration && !crossfadeStarted.value) {
@@ -102,6 +113,18 @@ export const usePlayerStore = defineStore('player', () => {
   setupAudioEvents(audioB, 'B')
 
   // --- ACTIONS ---
+  
+  // Fungsi untuk update play count ke database
+  const incrementPlayCount = async (songId: number) => {
+    try {
+        const db = await getDB();
+        await db.execute("UPDATE songs SET play_count = play_count + 1 WHERE id = $1", [songId]);
+        console.log(`Play count incremented for song ID: ${songId}`);
+    } catch (err) {
+        console.error("Failed to increment play count:", err);
+    }
+  }
+
   const loadCover = async (path: string | null) => {
     if (!path) { coverUrl.value = null; return; }
     try {
@@ -167,6 +190,9 @@ export const usePlayerStore = defineStore('player', () => {
     currentIndex.value = queue.value.findIndex(s => s.id === song.id)
     currentSong.value = song
     
+    // Reset status hitungan play count saat ganti lagu
+    hasCountedPlay.value = false 
+
     parseLyrics(song.lyrics || "") 
     crossfadeStarted.value = false 
     

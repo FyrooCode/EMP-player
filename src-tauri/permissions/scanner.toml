@@ -7,6 +7,16 @@ commands.allow = [
     "start_monitoring"
 ]
 
+# --- TAMBAHKAN BAGIAN INI ---
+[[permission]]
+identifier = "allow-metadata"
+description = "Izinkan frontend memanggil fungsi fetch data artis dan download image"
+commands.allow = [
+    "fetch_external_artist_data",
+    "download_artist_image"
+]
+# ----------------------------
+
 [[permission]]
 identifier = "allow-audio-read"
 description = "Allows reading audio files and covers from any location"
@@ -18,4 +28,8 @@ path = "**" # IZINKAN AKSES SEMUA PATH (UNIVERSAL)
 [[set]]
 identifier = "app-full-access"
 description = "Full access for the application commands and assets"
-permissions = ["allow-scan", "allow-audio-read"]
+permissions = [
+    "allow-scan", 
+    "allow-audio-read",
+    "allow-metadata"  # <-- MASUKKAN IDENTIFIER BARU KE SINI
+]

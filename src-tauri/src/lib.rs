@@ -12,9 +12,6 @@ struct WatcherState {
     watcher: Arc<Mutex<Option<notify::RecommendedWatcher>>>,
 }
 
-/**
- * Fungsi untuk mengekstrak cover album
- */
 fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     if let Ok(tagged_file) = Probe::open(path).unwrap().read() {
         if let Some(tag) = tagged_file.primary_tag() {
@@ -35,9 +32,6 @@ fn extract_cover(path: &Path, app_handle: &AppHandle) -> String {
     String::new()
 }
 
-/**
- * Fungsi rekursif scan folder
- */
 fn scan_directory_recursive(dir: &Path, music_data: &mut Vec<serde_json::Value>, app_handle: &AppHandle) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -81,8 +75,6 @@ fn scan_directory_recursive(dir: &Path, music_data: &mut Vec<serde_json::Value>,
     }
 }
 
-// --- COMMANDS ---
-
 #[tauri::command]
 async fn fetch_external_artist_data(artist: String) -> Result<serde_json::Value, String> {
     let url = format!("https://api.deezer.com/search/artist?q={}", urlencoding::encode(&artist));
@@ -109,7 +101,6 @@ async fn start_monitoring(path: String, app_handle: AppHandle, state: State<'_, 
     let path_to_watch = PathBuf::from(&path);
     let app_handle_clone = app_handle.clone();
     
-    // PERBAIKAN: Menambahkan tipe eksplisit notify::Result<notify::Event> pada closure
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| { 
         if res.is_ok() { 
             let _ = app_handle_clone.emit("library-changed", ()); 
@@ -137,15 +128,13 @@ pub fn run() {
     let migrations = vec![
         Migration {
             version: 1,
-            description: "normalized_schema_v1",
+            description: "normalized_schema_v2",
             sql: "
-                -- 1. SETTINGS
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY, 
-                    value TEXT
-                );
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA busy_timeout=5000;
 
-                -- 2. ARTISTS
+                CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
                 CREATE TABLE IF NOT EXISTS artists (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE,
@@ -153,8 +142,6 @@ pub fn run() {
                     bio TEXT,
                     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
-
-                -- 3. ALBUMS
                 CREATE TABLE IF NOT EXISTS albums (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT,
@@ -164,8 +151,6 @@ pub fn run() {
                     FOREIGN KEY (artist_id) REFERENCES artists (id) ON DELETE SET NULL,
                     UNIQUE(title, artist_id)
                 );
-
-                -- 4. SONGS
                 CREATE TABLE IF NOT EXISTS songs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     album_id INTEGER,
@@ -181,8 +166,6 @@ pub fn run() {
                     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
                     FOREIGN KEY (artist_id) REFERENCES artists (id) ON DELETE CASCADE
                 );
-
-                -- 5. LYRICS
                 CREATE TABLE IF NOT EXISTS lyrics (
                     song_id INTEGER PRIMARY KEY,
                     raw_lyrics TEXT,
@@ -190,8 +173,6 @@ pub fn run() {
                     is_synced BOOLEAN DEFAULT 0,
                     FOREIGN KEY (song_id) REFERENCES songs (id) ON DELETE CASCADE
                 );
-
-                -- 6. PLAYLISTS
                 CREATE TABLE IF NOT EXISTS playlists (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -199,8 +180,6 @@ pub fn run() {
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     last_played DATETIME
                 );
-
-                -- 7. PLAYLIST_SONGS
                 CREATE TABLE IF NOT EXISTS playlist_songs (
                     playlist_id INTEGER,
                     song_id INTEGER,
@@ -209,11 +188,7 @@ pub fn run() {
                     FOREIGN KEY (song_id) REFERENCES songs (id) ON DELETE CASCADE
                 );
 
-                -- DEFAULT SETTINGS
-                INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'dark');
-                INSERT OR IGNORE INTO settings (key, value) VALUES ('music_path', '');
-                INSERT OR IGNORE INTO settings (key, value) VALUES ('crossfade', '0');
-                INSERT OR IGNORE INTO settings (key, value) VALUES ('library_view', 'grid');
+                INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'dark'), ('music_path', ''), ('crossfade', '0'), ('library_view', 'grid');
             ",
             kind: MigrationKind::Up,
         }

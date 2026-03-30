@@ -10,6 +10,11 @@ const router = createRouter({
       component: LibraryView 
     },
     {
+      path: '/artist/:name',
+      name: 'ArtistDetails',
+      component: () => import('../views/ArtistView.vue')
+    },
+    {
       path: '/collections',
       name: 'collections',
       component: () => import('../views/CollectionsView.vue')

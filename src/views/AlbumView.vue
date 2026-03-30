@@ -19,23 +19,16 @@ const songs = ref<any[]>([])
 const albumInfo = ref<any>({ artist: 'Unknown Artist', coverUrl: null })
 
 const isDarkMode = computed(() => settings.isDarkMode)
+// Mapping warna untuk transisi light/dark
 const textColor = computed(() => isDarkMode.value ? '#ffffff' : '#0f172a')
 const secondaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.6)' : '#64748b')
-const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(160, 174, 192, 1)' : '#a0aeb8')
+const tertiaryTextColor = computed(() => isDarkMode.value ? 'rgba(255, 255, 255, 0.3)' : '#a0aeb8')
 
-/**
- * FETCH DETAIL ALBUM & LAGU (Relational Version)
- */
 const fetchAlbumDetails = async () => {
   try {
     const db = await getDB()
-    
-    // 1. Ambil Info Album & Artis Utama
     const albumRes = await db.select<any[]>(
-      `SELECT al.*, ar.name as artist_name 
-       FROM albums al 
-       JOIN artists ar ON al.artist_id = ar.id 
-       WHERE al.title = $1 LIMIT 1`,
+      `SELECT al.*, ar.name as artist_name FROM albums al JOIN artists ar ON al.artist_id = ar.id WHERE al.title = $1 LIMIT 1`,
       [albumName.value]
     )
 
@@ -43,131 +36,114 @@ const fetchAlbumDetails = async () => {
       const albumData = albumRes[0]
       albumInfo.value.artist = albumData.artist_name
       
-      // Load Cover dari path yang tersimpan di tabel albums
       if (albumData.cover_path) {
         try {
           const filename = albumData.cover_path.split(/[\\/]/).pop();
-          const relativePath = `covers/${filename}`;
-          const contents = await readFile(relativePath, { baseDir: BaseDirectory.AppLocalData });
-          const blob = new Blob([contents], { type: 'image/jpeg' });
-          albumInfo.value.coverUrl = URL.createObjectURL(blob);
-        } catch (err) {
-          console.error("Gagal load cover album:", err);
-        }
+          const contents = await readFile(`covers/${filename}`, { baseDir: BaseDirectory.AppLocalData });
+          albumInfo.value.coverUrl = URL.createObjectURL(new Blob([contents], { type: 'image/jpeg' }));
+        } catch (e) { console.error("Cover load failed", e) }
       }
 
-      // 2. Ambil Semua Lagu di Album ini (Join dengan Artist & Lyrics)
-      // Kita butuh 'lyrics' agar player bisa langsung menampilkan lirik saat lagu diklik
       const songsRes = await db.select<any[]>(
-        `SELECT 
-          s.*, 
-          ar.name as artist, 
-          al.title as album,
-          l.raw_lyrics as lyrics,
-          l.online_lyrics
-         FROM songs s
-         JOIN artists ar ON s.artist_id = ar.id
-         JOIN albums al ON s.album_id = al.id
-         LEFT JOIN lyrics l ON s.id = l.song_id
-         WHERE s.album_id = $1 
-         ORDER BY s.disc_num ASC, s.track_num ASC`,
+        `SELECT s.*, ar.name as artist, al.title as album, l.raw_lyrics as lyrics 
+         FROM songs s JOIN artists ar ON s.artist_id = ar.id 
+         JOIN albums al ON s.album_id = al.id LEFT JOIN lyrics l ON s.id = l.song_id
+         WHERE s.album_id = $1 ORDER BY s.track_num ASC`,
         [albumData.id]
       )
       songs.value = songsRes
     }
-  } catch (error) {
-    console.error("Gagal memuat detail album:", error)
-  }
+  } catch (error) { console.error(error) }
 }
 
-onMounted(() => {
-  fetchAlbumDetails()
-})
-
-const formatTime = (seconds: number) => {
-  if (!seconds) return "0:00"
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-const goBack = () => { router.back() }
+onMounted(fetchAlbumDetails)
+const formatTime = (s: number) => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`
+const goBack = () => router.back()
 </script>
 
 <template>
-  <div class="relative h-full overflow-y-auto pb-20 no-scrollbar">
-    
-    <button @click="goBack" class="flex items-center gap-2 transition-colors mb-8 group cursor-pointer" :style="{ color: secondaryTextColor }">
-      <ArrowLeft :size="20" class="group-hover:-translate-x-1 transition-transform" />
-      <span class="text-xs font-bold uppercase tracking-widest">Back to Library</span>
-    </button>
-
-    <div class="flex flex-col md:flex-row gap-8 mb-12 items-end px-2">
-      <div class="w-48 h-48 rounded-2xl overflow-hidden flex-shrink-0 border flex items-center justify-center transition-colors" 
-           :class="isDarkMode ? 'bg-slate-800/50 border-white/10' : 'bg-slate-200/50 border-black/5'">
-        <img v-if="albumInfo.coverUrl" :src="albumInfo.coverUrl" class="w-full h-full object-cover" />
-        <Disc v-else :size="48" :class="isDarkMode ? 'text-white/20' : 'text-black/20'" />
+  <div class="h-full overflow-y-auto no-scrollbar pb-32 animate-fade-in">
+    <!-- IMERSIVE BLURRED BANNER -->
+    <header class="relative w-full h-[420px] flex items-end overflow-hidden rounded-3xl bg-slate-950 shadow-2xl mb-10">
+      <div class="absolute inset-0 pointer-events-none select-none overflow-hidden">
+        <img v-if="albumInfo.coverUrl" :src="albumInfo.coverUrl" class="w-full h-full object-cover blur-[120px] scale-150 opacity-40" />
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
       </div>
 
-      <div class="flex-grow space-y-2">
-        <h1 class="text-5xl md:text-6xl font-black tracking-tighter italic uppercase leading-tight transition-colors" :style="{ color: textColor }">
-          {{ albumName }}
-        </h1>
-        <p class="font-bold tracking-[0.2em] uppercase text-sm transition-colors" :style="{ color: secondaryTextColor }">
-          {{ albumInfo.artist }} // {{ songs.length }} TRACKS
-        </p>
-      </div>
-    </div>
+      <button @click="goBack" class="absolute top-8 left-8 z-20 flex items-center gap-2 px-4 py-2 bg-black/20 hover:bg-white/10 backdrop-blur-md rounded-full text-white transition-all group border border-white/5 cursor-pointer">
+        <ArrowLeft :size="18" class="group-hover:-translate-x-1 transition-transform" />
+        <span class="text-[10px] font-black uppercase tracking-widest">Back to Library</span>
+      </button>
 
-    <div class="space-y-2">
-      <div class="flex items-center px-4 pb-2 border-b text-[10px] font-bold tracking-widest uppercase transition-colors"
-           :class="isDarkMode ? 'border-white/10' : 'border-black/5'"
-           :style="{ color: tertiaryTextColor }">
+      <div class="relative z-10 flex items-center gap-10 p-10 w-full">
+        <div class="w-52 h-52 rounded-2xl overflow-hidden shadow-2xl border border-white/10 shrink-0 bg-slate-800 flex items-center justify-center">
+          <img v-if="albumInfo.coverUrl" :src="albumInfo.coverUrl" class="w-full h-full object-cover" />
+          <Disc v-else :size="64" class="opacity-10 text-white" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <h1 class="text-7xl font-black tracking-tighter italic uppercase text-white leading-tight drop-shadow-2xl">{{ albumName }}</h1>
+          <p class="font-black tracking-[0.4em] uppercase text-sm text-blue-400">{{ albumInfo.artist }}</p>
+          <p class="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mt-2">{{ songs.length }} Tracks // Album</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- SONGS LIST WITH VISUALIZER -->
+    <div class="px-6 space-y-1">
+      <!-- Table Header -->
+      <div class="flex items-center px-6 py-3 border-b border-white/5 text-[10px] font-black tracking-[0.3em] uppercase opacity-30 dark:text-white">
         <div class="w-12 text-center">#</div>
-        <div class="flex-grow">Title</div>
-        <div class="w-16 text-center"><BarChart2 :size="14" class="inline" /></div>
+        <div class="flex-grow">Track Title</div>
+        <div class="w-20 text-center"><BarChart2 :size="14" class="inline" /></div>
         <div class="w-20 text-right"><Clock :size="14" class="inline" /></div>
       </div>
 
+      <!-- Song Rows -->
       <div v-for="(song, index) in songs" :key="song.id" 
            @click="player.playTrack(song, songs)"
            @contextmenu.prevent="contextMenu.openMenu($event, song)"
-           class="flex items-center px-4 py-3 rounded-xl transition-colors group cursor-pointer"
+           class="flex items-center px-6 py-4 rounded-2xl transition-all group cursor-pointer"
            :class="[
              isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-200/50',
              player.currentSong?.id === song.id ? (isDarkMode ? 'bg-white/10' : 'bg-slate-200/80') : ''
            ]">
         
-        <div class="w-12 text-center text-xs font-bold relative transition-colors" :style="{ color: tertiaryTextColor }">
+        <!-- Index / Play Icon / Visualizer -->
+        <div class="w-12 text-center text-xs font-black relative" :style="{ color: tertiaryTextColor }">
+          <!-- Default Index Number -->
           <span :class="{'opacity-0': player.currentSong?.id === song.id}" class="group-hover:opacity-0 transition-opacity">
-            {{ song.track_num > 0 ? song.track_num : index + 1 }}
+            {{ song.track_num || index + 1 }}
           </span>
           
+          <!-- Animated Bouncing Bars (If Playing) -->
           <div v-if="player.currentSong?.id === song.id" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-0.5 h-3">
-             <div class="w-1 bg-current h-full animate-bounce" :style="{ color: textColor, animationDelay: '0ms' }"></div>
-             <div class="w-1 bg-current h-1/2 animate-bounce" :style="{ color: textColor, animationDelay: '150ms' }"></div>
-             <div class="w-1 bg-current h-3/4 animate-bounce" :style="{ color: textColor, animationDelay: '300ms' }"></div>
+              <div class="w-1 bg-blue-500 h-full animate-bounce" style="animation-delay: 0ms"></div>
+              <div class="w-1 bg-blue-500 h-1/2 animate-bounce" style="animation-delay: 150ms"></div>
+              <div class="w-1 bg-blue-500 h-3/4 animate-bounce" style="animation-delay: 300ms"></div>
           </div>
           
-          <Play v-else :size="14" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity fill-current" 
-                :style="{ color: textColor }" />
+          <!-- Play Icon (On Hover) -->
+          <Play v-else :size="14" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity fill-current text-blue-500" />
         </div>
 
-        <div class="flex-grow text-sm font-bold transition-colors flex items-center gap-2" :style="{ color: player.currentSong?.id === song.id ? '#3b82f6' : textColor }">
-          <span class="truncate">{{ song.title }}</span>
-          <span v-if="song.disc_num > 1" class="text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 opacity-50 uppercase tracking-tighter shrink-0">
+        <!-- Title & Info -->
+        <div class="flex-grow flex items-center gap-3 min-w-0">
+          <span class="font-bold text-sm uppercase truncate transition-colors"
+                :class="player.currentSong?.id === song.id ? 'text-blue-500' : 'dark:text-white text-slate-900'">
+            {{ song.title }}
+          </span>
+          <span v-if="song.disc_num > 1" class="text-[8px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 opacity-40 uppercase font-black shrink-0 dark:text-white">
             Disc {{ song.disc_num }}
           </span>
         </div>
 
-        <div class="w-16 text-center text-[10px] font-black transition-colors" :style="{ color: tertiaryTextColor }">
-          <span v-if="song.play_count > 0" class="opacity-80">
-            {{ song.play_count }} <span class="text-[8px] opacity-40">PLAYS</span>
-          </span>
-          <span v-else class="opacity-20">-</span>
+        <!-- Play Count -->
+        <div class="w-20 text-center text-[10px] font-black opacity-30 dark:text-white uppercase">
+          {{ song.play_count || 0 }} <span class="text-[8px] opacity-40">Plays</span>
         </div>
 
-        <div class="w-20 text-right text-xs font-mono transition-colors" :style="{ color: secondaryTextColor }">
+        <!-- Duration -->
+        <div class="w-20 text-right font-mono text-xs opacity-40 dark:text-white">
           {{ formatTime(song.duration) }}
         </div>
       </div>
@@ -177,8 +153,12 @@ const goBack = () => { router.back() }
 
 <style scoped>
 .no-scrollbar::-webkit-scrollbar { display: none; }
-.animate-bounce { animation: bounce 0.6s infinite alternate; }
-@keyframes bounce {
+.animate-fade-in { animation: fadeIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Visualizer Animation */
+.animate-bounce { animation: visualizer 0.6s infinite alternate; }
+@keyframes visualizer {
   from { transform: scaleY(0.4); }
   to { transform: scaleY(1.2); }
 }
